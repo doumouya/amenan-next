@@ -4,12 +4,43 @@
    Tailwind's base step THE minor grid (--bl-h): integer utilities are on-rhythm by
    construction; arbitrary values are the only escape and the census catches them. */
 
+/* THE TIER'S OWN SCAN SCOPE.
+   Tailwind emits a utility only if it finds that class string in a file it SCANS, and automatic
+   source detection roots at the CONSUMER's project. This tier is repo-adjacent — outside every
+   consumer's root — so without these two lines nothing here is scanned and every class used only
+   by a tier component compiles to nothing. Measured on datacore's first repoint: 45 of the shell's
+   125 classes absent from the shipped stylesheet (42,282 → 49,154 bytes once in scope), while tsc,
+   vitest, `next build` and 42 gates were all green. They verify that this tier RESOLVES; none of
+   them verifies that its CSS is GENERATED.
+
+   Relative to THIS file, not to the consumer's entry point (verified: a nested `@source` two
+   levels down emits its fixture's utility), so `../` is this tier's `src/` and it is right for
+   every consumer without any of them knowing the path. It belongs here for the same reason the
+   variants below do — see the sentence at the end of that note, which covers both.
+
+   THE FAILURE IS SILENT IN BOTH DIRECTIONS: an `@source` pointing at a path that does not exist
+   compiles clean and emits nothing, exit 0. So this line cannot be guarded by grepping for it —
+   datacore's fe-build-audit `[css]` rule runs the CSS compiler twice and diffs the selector sets.
+
+   `__tests__` is excluded to keep this scope identical to the census gate's (which scopes fixtures
+   out of every rule): a fixture class is not this tier's public surface and should not land in
+   every consumer's bundle. It costs 0 bytes today — measured, both with and without — so the line
+   buys agreement between the two scopes rather than size. `@source not` was confirmed to have
+   teeth the same way: excluding `../shell` drops the output back to the broken 42,282 exactly. */
+@source "../**/*.{ts,tsx}";
+@source not "../**/__tests__/**";
+
 /* THE TWO CUSTOM VARIANTS THE SHELL'S CLASSES USE.
    They were left behind in the donor's app-level globals.css, and that is exactly the kind of gap
    an extraction has to close: a `short:py-1` in a shipped component compiles to NOTHING when the
    variant is undeclared — no error, no warning, just a composer that quietly stops compacting on
    a 620px Meet window. A variant a component depends on belongs with the bridge that component
    reads, not with whichever consumer happened to declare it first.
+
+   That last sentence is why the `@source` scope above sits here too, and the pair of them is the
+   whole precondition for a `short:py-1` reaching the browser: the variant must be DECLARED and the
+   file must be SCANNED. The census gate's R6 checks the first. Nothing checked the second, which
+   is how a rule written against exactly this failure mode covered half of it.
 
    `dark` is here for the same reason and one more: the mode axis is an ATTRIBUTE on <html>
    (theme.ts writes it), so Tailwind's default `prefers-color-scheme` variant would be wrong —

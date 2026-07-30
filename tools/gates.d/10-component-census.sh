@@ -147,7 +147,34 @@ def scan(text):
 
 
 def strip_css(text):
-    return re.sub(r'/\*.*?\*/', lambda m: re.sub(r'[^\n]', ' ', m.group(0)), text, flags=re.S)
+    """Blank CSS comments, keeping string literals whole.
+
+    STRING-AWARE ON PURPOSE, and it cost a red self-test to learn why: the regex form of this
+    (`/\\*.*?\\*/`) eats `/**/` wherever it appears — including inside `@source "../**/*.{ts,tsx}"`,
+    where `/**/` is the recursive-glob separator and ALSO, read as CSS, a perfectly valid empty
+    comment. R8 then measured `..    *.{ts,tsx}` and declared the whole tier unscanned. The lexer
+    was right about CSS and wrong about the only thing that matters, which is the same shape as the
+    bug R8 exists to catch.
+    """
+    out, i, n = [], 0, len(text)
+    while i < n:
+        c = text[i]
+        if c == '/' and text.startswith('/*', i):
+            j = text.find('*/', i + 2)
+            j = n if j < 0 else j + 2
+            out.append(re.sub(r'[^\n]', ' ', text[i:j]))
+            i = j
+            continue
+        if c in '"\'':
+            j = i + 1
+            while j < n and text[j] != c:
+                j += 2 if text[j] == '\\' else 1
+            out.append(text[i:j + 1])
+            i = j + 1
+            continue
+        out.append(c)
+        i += 1
+    return ''.join(out)
 
 
 def read(path):
@@ -449,12 +476,48 @@ for p in css:
                       'through the first app\'s namespace. This tier\'s prefix is `an-`.'
                 % (rel(p), line, m.group(0)[:-1]))
 
+# ── R8 · every shipped source file is inside a declared @source root ─────────────────────────
+# The OTHER half of R6's precondition. A class reaches the browser only if its variant is DECLARED
+# (R6) *and* its file is SCANNED — and Tailwind's automatic source detection roots at the CONSUMER's
+# project, which this repo sits outside. R6 was written against "compiles to nothing, silently" and
+# checked one of the two conditions; the missed one shipped datacore a console with 45 of the
+# shell's 125 classes absent while tsc, vitest, `next build` and 42 gates were green.
+#
+# SCOPE, named rather than implied: this rule reads TEXT — it resolves each `@source` pattern's
+# non-glob prefix and asks whether every shipped file lies under one. It cannot tell you the CSS
+# actually came out right, because this tier compiles no CSS of its own; nothing here can. The real
+# oracle lives in the consumer (datacore's fe-build-audit `[css]` rule runs the Tailwind compiler
+# twice and diffs the selector sets). This is deliberately the weaker half of that pair, and it is
+# here because THIS is the file the line must not vanish from.
+#
+# `@source not` is out of scope for the same reason: a negation's effect is a question about
+# matching, not about prefixes, and getting it wrong here would trade a real check for a plausible
+# one. An over-broad negation reddens the consumer's execution rule on the next run.
+source_roots = []
+for p in css:
+    for m in re.finditer(r'@source\s+(?!not\b)(?:inline\()?["\']([^"\']+)["\']', strip_css(read(p))):
+        pat = m.group(1)
+        cut = min([i for i in (pat.find('*'), pat.find('{'), pat.find('?')) if i >= 0] or [len(pat)])
+        base = pat[:cut].rsplit('/', 1)[0] if cut < len(pat) else pat
+        source_roots.append(os.path.normpath(os.path.join(os.path.dirname(p), base or '.')))
+
+uncovered = [p for p in shell_src + lib_src
+             if not any(p == r or p.startswith(r + os.sep) for r in source_roots)]
+if uncovered:
+    finding('R8', '%d shipped file(s) — e.g. %s — lie outside every `@source` root declared in %s '
+                  '(%s). Tailwind scans from the CONSUMER\'s project root, which this tier is not '
+                  'inside, so a class used only by an unscanned file emits NO utility: no error, no '
+                  'warning, and every typecheck and unit test still passes. The declaration belongs '
+                  'in the bridge, where the variants it pairs with already live.'
+            % (len(uncovered), rel(uncovered[0]), rel(THEME),
+               ', '.join(rel(r) for r in source_roots) or 'none declared'))
+
 if not fails:
     print('component-census: clean (%d components — %d exported and in the barrel, %d '
           'file-private; %d source file(s), %d css file(s), %d custom variant(s) declared, '
-          '%d class token(s) read)'
+          '%d class token(s) read, %d @source root(s))'
           % (n_components, n_exported, n_private, len(shell_src + lib_src), len(css),
-             len(declared), n_tokens))
+             len(declared), n_tokens, len(source_roots)))
 sys.exit(1 if fails else 0)
 PY
 }
@@ -477,7 +540,7 @@ expect() { # $1 = the finding TAG ITSELF, $2 = expected count, $3 = what was pla
 }
 only() { # $1 = the tag that may fire, $2 = its count, $3 = what was planted
   expect "$1" "$2" "$3"
-  for t in '[R0]' '[R1]' '[R2]' '[R3]' '[R4]' '[R5]' '[R6]' '[R7]'; do
+  for t in '[R0]' '[R1]' '[R2]' '[R3]' '[R4]' '[R5]' '[R6]' '[R7]' '[R8]'; do
     [ "$t" = "$1" ] || expect "$t" 0 "$3 — $t must stay silent"
   done
 }
@@ -509,6 +572,8 @@ TSX
 export interface Spec { run: (v: string) => void }
 TS
   cat >"$d/src/theme/bridge.css" <<'CSS'
+@source "../**/*.{ts,tsx}";
+@source not "../**/__tests__/**";
 @custom-variant short { @media (max-height: 40rem) { @slot; } }
 @theme inline { --color-bg: var(--bg); }
 CSS
@@ -629,9 +694,13 @@ TSX
 run
 only '[R6]' 1 'a variant no @custom-variant declares'
 
-# and the load-bearing direction: deleting the DECLARATION must ring for the existing usage
+# and the load-bearing direction: deleting the DECLARATION must ring for the existing usage.
+# The @source line stays: this plant is about the variant half of the precondition, and leaving
+# both out would let R8's finding stand in for R6's — which is the cross-firing `only` exists to
+# catch.
 clean
 cat >"$d/src/theme/bridge.css" <<'CSS'
+@source "../**/*.{ts,tsx}";
 @theme inline { --color-bg: var(--bg); }
 CSS
 run
@@ -658,5 +727,25 @@ export const THEME_KEY = "dc-theme";
 TS
 run
 only '[R7]' 1 'a `dc-` storage key in the theme runtime — the live instance this rule was written for'
+
+# ── R8 · the scan scope removed, and the scan scope made too narrow ──────────────────────────
+# The first plant is the live regression: the declaration simply absent, which is the state this
+# tier shipped in and every downstream check called green.
+clean
+grep -v '^@source' "$d/src/theme/bridge.css" >"$d/src/theme/bridge.tmp"
+mv "$d/src/theme/bridge.tmp" "$d/src/theme/bridge.css"
+run
+only '[R8]' 1 'the @source declaration deleted — no file in the tier is scanned by any consumer'
+
+# The second is the subtler one and the reason this is a coverage test and not an existence test:
+# a declaration that is PRESENT and covers only half the tier reads as done at a glance.
+clean
+cat >"$d/src/theme/bridge.css" <<'CSS'
+@source "../shell/**/*.tsx";
+@custom-variant short { @media (max-height: 40rem) { @slot; } }
+@theme inline { --color-bg: var(--bg); }
+CSS
+run
+only '[R8]' 1 'an @source covering src/shell only — src/lib is shipped platform code too'
 
 check "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
