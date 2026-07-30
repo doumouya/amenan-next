@@ -1,0 +1,78 @@
+/* bridge.css — the ONE Tailwind v4 mapping over the contract (README, "The laws it carries").
+   `@theme inline` is load-bearing: utilities emit var(--token) at runtime, so the
+   attribute flip restyles everything with zero rebuild. --spacing: 0.25rem makes
+   Tailwind's base step THE minor grid (--bl-h): integer utilities are on-rhythm by
+   construction; arbitrary values are the only escape and the census catches them. */
+
+/* THE TWO CUSTOM VARIANTS THE SHELL'S CLASSES USE.
+   They were left behind in the donor's app-level globals.css, and that is exactly the kind of gap
+   an extraction has to close: a `short:py-1` in a shipped component compiles to NOTHING when the
+   variant is undeclared — no error, no warning, just a composer that quietly stops compacting on
+   a 620px Meet window. A variant a component depends on belongs with the bridge that component
+   reads, not with whichever consumer happened to declare it first.
+
+   `dark` is here for the same reason and one more: the mode axis is an ATTRIBUTE on <html>
+   (theme.ts writes it), so Tailwind's default `prefers-color-scheme` variant would be wrong —
+   it would ignore an explicit user choice. */
+@custom-variant dark (&:where(html[data-mode="dark"] *));
+
+/* height-qualified compaction, for the Meet-window realities a presentation actually runs in */
+@custom-variant short {
+  @media (max-height: 40rem) {
+    @slot;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  /* --hover has been in the contract since the start but was never bridged, which is why every
+     hover state in the donor console was either hand-rolled or missing: a token nothing maps is
+     a token nothing can use, and the gap reads as "there is no hover token" */
+  --color-hover: var(--hover);
+  --color-ink: var(--text);
+  --color-dim: var(--text-dim);
+  --color-mute: var(--text-mute);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-on-accent: var(--on-accent);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-info: var(--info);
+  --color-danger: var(--danger);
+  --color-signal: var(--signal);
+  --color-signal-hover: var(--signal-hover);
+  --color-signal-tint: var(--signal-tint);
+  --color-rule: var(--rule);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
+  --color-chart-7: var(--chart-7);
+  --color-chart-8: var(--chart-8);
+  --color-status-backlog: var(--status-backlog);
+  --color-status-progress: var(--status-progress);
+  --color-status-review: var(--status-review);
+  --color-status-done: var(--status-done);
+
+  --shadow-card: var(--shadow);
+  --shadow-popover: var(--shadow-popover);
+  --shadow-dialog: var(--shadow-dialog);
+
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius);
+  --radius-lg: var(--radius-lg);
+  /* mapped, not left to Tailwind's default 0.75rem: the composer's radius must ride the theme
+     like every other one. Both shipped looks override it — datacore 1rem, signal-ink 14px — so
+     dropping this mapping silently resizes the composer frame on BOTH of them. */
+  --radius-xl: var(--radius-xl);
+
+  --font-sans: var(--font);
+  --font-mono: var(--font-mono);
+
+  --spacing: 0.25rem;
+}

@@ -1,0 +1,114 @@
+/* fonts.css — self-hosted variable fonts. Text faces: font-display swap. Material Symbols:
+   BLOCK — swap flashes the raw ligature WORDS, which is worse than a beat of no icon.
+
+   THE ASSET CONTRACT, because this file hard-codes paths and a consumer has to be able to read
+   what it owes. Importing this stylesheet obliges the consumer to serve these files at these
+   URLs, from its own origin root:
+
+     /fonts/Roboto[wdth,wght].ttf          /fonts/Roboto-Italic[wdth,wght].ttf
+     /fonts/RobotoMono[wght].ttf           /fonts/RobotoMono-Italic[wght].ttf     (theme: datacore)
+     /fonts/Inter[opsz,wght].ttf           /fonts/Inter-Italic[opsz,wght].ttf
+     /fonts/JetBrainsMono[wght].ttf        /fonts/JetBrainsMono-Italic[wght].ttf  (theme: signal-ink)
+     /fonts/material-symbols-subset.woff2                                         (every theme)
+
+   Only the faces of a theme it actually registers, plus the icon subset, which is not optional.
+   The paths are absolute and un-parameterised on purpose: CSS `url()` cannot read a custom
+   property, so a "configurable base" would have to be a build step, and a build step in the
+   theme tier is a bigger tax than one directory name. A consumer that cannot serve /fonts/ ships
+   its own @font-face block and skips this file. */
+
+@font-face {
+  font-family: "Roboto";
+  src: url("/fonts/Roboto[wdth,wght].ttf") format("truetype-variations");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Roboto";
+  src: url("/fonts/Roboto-Italic[wdth,wght].ttf") format("truetype-variations");
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Roboto Mono";
+  src: url("/fonts/RobotoMono[wght].ttf") format("truetype-variations");
+  font-weight: 100 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Roboto Mono";
+  src: url("/fonts/RobotoMono-Italic[wght].ttf") format("truetype-variations");
+  font-weight: 100 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* signal-ink theme faces */
+@font-face {
+  font-family: "Inter";
+  src: url("/fonts/Inter[opsz,wght].ttf") format("truetype-variations");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Inter";
+  src: url("/fonts/Inter-Italic[opsz,wght].ttf") format("truetype-variations");
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/fonts/JetBrainsMono[wght].ttf") format("truetype-variations");
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/fonts/JetBrainsMono-Italic[wght].ttf") format("truetype-variations");
+  font-weight: 100 800;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* The icon font — block, never swap (ligature names must not flash as words).
+   SUBSET: the full variable TTF is 10.2 MiB and rides the critical path, so it is subsetted by
+   ligature name — 36 KiB for a console's worth of glyphs, all four axes intact. The census this
+   tier demands is src/shell/symbols.txt; a consumer merges it into its own list, re-subsets, and
+   preloads the result from its document head. A glyph rendered but not subsetted paints its own
+   NAME in prose inside the button, because font-display is block — that is the whole reason the
+   census travels with the components. The filename carries no bracket-axis suffix, which also
+   keeps a preload's cache key from disagreeing with the @font-face URL. */
+@font-face {
+  font-family: "Material Symbols Outlined";
+  src: url("/fonts/material-symbols-subset.woff2") format("woff2");
+  font-weight: 100 700;
+  font-display: block;
+}
+
+.msym {
+  font-family: "Material Symbols Outlined";
+  font-weight: normal;
+  font-style: normal;
+  line-height: 1;
+  display: inline-block;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+  font-feature-settings: "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  user-select: none;
+}
+
+.msym-fill {
+  font-variation-settings: "FILL" 1, "wght" 400, "GRAD" 0, "opsz" 24;
+}

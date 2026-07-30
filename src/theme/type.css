@@ -1,0 +1,50 @@
+/* type.css — M3 type roles as Tailwind text tokens. Console register: spacing rhythm only, and
+   no editorial baseline lock — a console does not sit still long enough for one, and claiming a
+   lock the layout does not keep is worse than not claiming it. Every line-height is a 0.25rem
+   (--bl-h) multiple, so text blocks stack on the minor grid. */
+
+@theme {
+  --text-display-sm: 2.25rem;
+  --text-display-sm--line-height: 2.75rem;
+  --text-headline-sm: 1.5rem;
+  --text-headline-sm--line-height: 2rem;
+  --text-title-lg: 1.375rem;
+  --text-title-lg--line-height: 1.75rem;
+  --text-title-md: 1rem;
+  --text-title-md--line-height: 1.5rem;
+  --text-title-md--font-weight: 500;
+  --text-title-sm: 0.875rem;
+  --text-title-sm--line-height: 1.25rem;
+  --text-title-sm--font-weight: 500;
+  --text-body-lg: 1rem;
+  --text-body-lg--line-height: 1.5rem;
+  --text-body-md: 0.875rem;
+  --text-body-md--line-height: 1.25rem;
+  --text-body-sm: 0.75rem;
+  --text-body-sm--line-height: 1rem;
+  /* PROSE — the reading register, and the only role whose leading is set for comfort rather
+     than density. Same 14px as body-md; 1.5rem leading is a 1.71 ratio (the house reading
+     reference asks for 1.7, which at 14px is 23.8px and off the 0.25rem grid — 24px is both).
+     It exists as its own role BECAUSE body-md is chrome: table cells, chips, buttons and the
+     composer all carry it, and 24px leading there just makes the console taller. Two registers,
+     each saying what it is for. Use this one for anything someone READS: agent replies,
+     notices, a surface's pitch line. */
+  --text-prose: 0.875rem;
+  --text-prose--line-height: 1.5rem;
+  --text-label-lg: 0.875rem;
+  --text-label-lg--line-height: 1.25rem;
+  --text-label-lg--font-weight: 500;
+  --text-label-md: 0.75rem;
+  --text-label-md--line-height: 1rem;
+  --text-label-md--font-weight: 500;
+  --text-label-sm: 0.6875rem;
+  --text-label-sm--line-height: 1rem;
+  --text-label-sm--font-weight: 500;
+}
+
+/* Numbers that align (tables, meters, money) never proportionally space. */
+.num,
+table td[data-num],
+[data-tabular] {
+  font-variant-numeric: tabular-nums;
+}

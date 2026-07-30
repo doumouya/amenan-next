@@ -1,0 +1,51 @@
+# symbols.txt — the glyph census for src/shell/, in the donor's format on purpose.
+#
+# The format is the donor's, so a consumer can concatenate this list into its own: one ligature
+# name per line, comments and blank lines ignored, and a font-subsetting step reads it.
+#
+# NOTHING IN THIS REPO ENFORCES IT YET. The donor has a gate that fails a `<Symbol name="…">`
+# missing from its list; here the census is a hand-checked file, and that is the honest state of
+# it. The check is not a one-liner because a glyph reaches `<Symbol>` through DEFAULT_RAIL_GLYPHS
+# and the two EMPTY_ICON constants as often as it is written literally, so a scan of the literals
+# alone would certify half the census — which is worse than no gate. Enforcement is the consumer's
+# until that is written.
+#
+# WHY THIS FILE EXISTS AT ALL: Material Symbols are a FONT, subsetted by ligature name (65 glyphs,
+# 36 KiB, down from a 10.2 MiB variable font on the critical path). `font-display: block`, so a
+# glyph that is rendered but not subsetted does not fall back — it paints its own name, in prose,
+# inside the button. This file is what stops that, and it has to travel with the components or the
+# first consumer to adopt them ships a rail reading "keyboard_double_arrow_left".
+#
+# The list is split by where the demand comes from, because the second half is new.
+
+# ── used by LeftPanel / RightPanel / Composer — ALL present in the donor census ───────────────
+attach_file
+circle
+close_fullscreen
+hourglass_top
+keyboard_double_arrow_left
+keyboard_double_arrow_right
+keyboard_return
+keyboard_tab
+left_panel_open
+open_in_full
+widgets
+
+# ── used by RailTree — NEW. RailTree has no datacore donor (its rail is a flat read-only stack),
+#    so none of these were ever demanded by that console and none are in its census. A consumer
+#    adopting RailTree must add these lines to its own list and re-subset, or every row action
+#    paints as a word. `add`, `check`, `chevron_right`, `expand_more` and `push_pin` are the
+#    exceptions — those five are already in the donor census. ─────────────────────────────────
+add
+check
+chevron_right
+expand_more
+push_pin
+# genuinely new to the census — seven glyphs (note `delete`, not the donor's `delete_sweep`):
+delete
+description
+drag_indicator
+edit
+tag
+visibility
+visibility_off

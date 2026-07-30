@@ -1,0 +1,76 @@
+/* grid.css — the house baseline family (rem, never px — the rhythm scales with type)
+   + the G-key overlay chrome. Colors derive from tokens via color-mix (no literals). */
+
+:root {
+  --bl: 0.5rem;
+  --bl-h: 0.25rem;
+  --bl-q: 0.125rem;
+
+  /* The named STRUCTURE tiers — restored from the numu1 amenan-ui contract so the density,
+     stacking, motion, and breakpoint decisions have NAMES again (Tailwind delegates the
+     spacing scale, but these load-bearing dimensions are the source of truth; referenced via
+     arbitrary values, e.g. h-[var(--topbar-h)]). Mirrors amenan-ui/src/theme/base.css. */
+
+  /* density (the chrome rhythm — px-frozen against the type scale, numu1 law).
+     `--topbar-h` and `--rail-w` are GONE with the regions they measured: a token naming a
+     region the shell no longer renders is a lie the next reader has to disprove. */
+  --row-h: 2.25rem;      /* 36px — table/list rows (the virtualizer's ROW_H, now named) */
+  --ctl-h: 2rem;         /* 32px — controls */
+  --object-rail-w: 16rem; /* 256px — the object rail (numu1's was 240px; +grid) */
+  --context-w: 20rem;    /* 320px — the context/detail rail */
+
+  /* the stacking contract (numu1 --z-*) — one home for layer order */
+  --z-base: 0;
+  --z-rail: 10;
+  --z-side-panel: 30;
+  --z-scrim: 29; /* BELOW the panel it frames — equal z let DOM order paint the scrim over the
+                    mobile drawer and swallow every tap (the verify find) */
+  --z-popover: 100;
+  --z-toast: 200;
+  --z-modal: 300;
+
+  /* motion (Material curve + the two durations numu1 ships), retuned to the reference's
+     "nearly invisible, 150–200ms" band — 0.12s read as a snap, 0.22s as a slide */
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --fast: 0.15s;
+  --slow: 0.2s;
+
+  /* conversation rhythm (the composer-settings density knob writes data-density).
+     24px between entries — the reference's `gap: 24px`; 16px packed replies together once
+     they stopped being bordered cards and had no edge of their own to separate them. */
+  --thread-gap: 1.5rem;
+
+  /* the responsive ladder (mirrors the Tailwind md/lg the shell uses) */
+  --bp-sm: 48rem;
+  --bp-md: 64rem;
+  --bp-lg: 80rem;
+
+  /* the one radius Tailwind's --radius-* trio omitted */
+  --radius-pill: 999px;
+}
+
+/* The dev grid overlay — drawn INSIDE the surface scroller, on the same content box as the
+   content it measures (an instrument that measures a different box measures nothing). The
+   consumer owns the toggle; this file owns the ink.
+
+   `an-` is this tier's class prefix, and it is the ONLY one it may use. The class was `.dc-`,
+   a consumer's prefix in a shared stylesheet: the second app to import this file would have been
+   styling itself through the first app's namespace. (Compare amenan-ui's `.amu-`.) */
+.an-gridguide {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 40;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    color-mix(in oklab, var(--signal) 18%, transparent) 0,
+    color-mix(in oklab, var(--signal) 18%, transparent) 1px,
+    transparent 1px,
+    transparent var(--bl)
+  );
+}
+
+/* density: compact (composer settings) — tightens the conversation + list rhythm */
+html[data-density="compact"] {
+  --thread-gap: 0.5rem;
+}

@@ -1,0 +1,35 @@
+{
+  "name": "amenan-next",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The house front-end platform tier: the token contract, the Tailwind v4 bridge, and the five-region console shell. Extracted from datacore-gcp/web; consumed by datacore-gcp and numu2.",
+  "type": "module",
+  "sideEffects": ["*.css"],
+  "exports": {
+    ".": "./src/index.ts",
+    "./theme": "./src/theme/theme.ts",
+    "./theme/contract.css": "./src/theme/contract.css",
+    "./theme/bridge.css": "./src/theme/bridge.css",
+    "./theme/type.css": "./src/theme/type.css",
+    "./theme/grid.css": "./src/theme/grid.css",
+    "./theme/fonts.css": "./src/theme/fonts.css"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "ci": "bash tools/ci.sh"
+  },
+  "peerDependencies": {
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
+  },
+  "devDependencies": {
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "jsdom": "30.0.0",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "typescript": "5.9.3",
+    "vitest": "4.1.10"
+  }
+}

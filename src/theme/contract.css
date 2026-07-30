@@ -1,0 +1,217 @@
+/* contract.css — the house 40-token contract × two themes × two modes.
+   Attribute-keyed: html[data-theme]×[data-mode]; the ONLY file where color hex lives.
+   Palettes are tuned against a contrast measurement, not against the brand swatch: any consumer
+   running a contrast audit parses THIS file, because it is the one place the inks are literal.
+
+   A THEME NAME IS A LOOK, and a look may carry the name of the app it was designed for — the
+   same way amenan-ui ships `redpash` and `portfolio` as looks any consumer may wear. What is NOT
+   in this file, and must not come back, is which look a consumer OPENS in: that default is the
+   app's policy and it is a required field of `createThemeRuntime` (theme.ts). `SHIPPED_THEMES`
+   there is the census of the two blocks below; adding a third look means a block here, a line
+   there, and nothing else. */
+
+/* ── per-theme constants (shared by both modes) ─────────────────────────── */
+
+html[data-theme="datacore"] {
+  --font: "Roboto", system-ui, sans-serif;
+  --font-mono: "Roboto Mono", ui-monospace, monospace;
+  --radius-sm: 0.25rem;
+  --radius: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;      /* the composer frame — the one control that is a focal point, so it
+                             carries a radius of its own rather than the card radius */
+}
+
+html[data-theme="signal-ink"] {
+  --font: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --radius-sm: 4px;
+  --radius: 6px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
+}
+
+/* ── datacore · light — the M3 Google-console look (Roboto, #0b57d0 blue) ── */
+
+html[data-theme="datacore"][data-mode="light"] {
+  color-scheme: light;
+  --bg: #f8f9fa;
+  --surface: #ffffff;
+  --surface-2: #f1f3f4;
+  /* Softened from the solid #dadce0 to a wash, and SPLIT from --rule. The shell paints ONE fill
+     across all five regions, so the four region rules are the only structure left in the frame
+     and they keep a touch more presence than a component's edge does. Washes, not hex, so they
+     sit on whatever ground they land on — a contrast audit skips non-hex by design (these are
+     not text inks). */
+  --border: rgba(15, 17, 21, 0.10);
+  --text: #1f1f1f;
+  --text-dim: #444746;
+  --text-mute: #5f6368;
+  --accent: #0b57d0;
+  --accent-soft: #d3e3fd;
+  --on-accent: #ffffff;
+  --ok: #146c2e;
+  --warn: #8f4f00;
+  --info: #0b57d0;
+  --danger: #b3261e;
+  --hover: rgba(31, 31, 31, 0.06);
+  --glass: rgba(255, 255, 255, 0.72);
+  --glass-blur: 12px;
+  --shadow: 0 1px 2px rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15);
+  --ring: 0 0 0 1px var(--border);
+  --focus-ring: 0 0 0 2px rgba(11, 87, 208, 0.45);
+  --signal: #0b57d0;
+  --signal-hover: #0842a0;
+  --signal-tint: #e8f0fe;
+  --rule: rgba(15, 17, 21, 0.12);
+  --rule-shadow: 0 1px 2px rgba(60, 64, 67, 0.15);
+  --chart-1: #1a73e8;
+  --chart-2: #c5221f;
+  --chart-3: #b26a00;
+  --chart-4: #188038;
+  --chart-5: #8430ce;
+  --chart-6: #007b83;
+  --chart-7: #d93025;
+  --chart-8: #5f6368;
+  --status-backlog: #5f6368;
+  --status-progress: #1a73e8;
+  --status-review: #b26a00;
+  --status-done: #188038;
+  --shadow-popover: 0 4px 8px 3px rgba(60, 64, 67, 0.15), 0 1px 3px rgba(60, 64, 67, 0.3);
+  --shadow-dialog: 0 8px 12px 6px rgba(60, 64, 67, 0.15), 0 4px 4px rgba(60, 64, 67, 0.3);
+}
+
+/* ── datacore · dark ────────────────────────────────────────────────────── */
+
+html[data-theme="datacore"][data-mode="dark"] {
+  color-scheme: dark;
+  --bg: #131314;
+  --surface: #1e1f20;
+  --surface-2: #28292a;
+  /* the dark twin of the light split above — see the note there */
+  --border: rgba(255, 255, 255, 0.08);
+  --text: #e3e3e3;
+  --text-dim: #c4c7c5;
+  --text-mute: #9aa0a6;
+  --accent: #a8c7fa;
+  --accent-soft: rgba(168, 199, 250, 0.16);
+  --on-accent: #062e6f;
+  --ok: #81c995;
+  --warn: #fdd663;
+  --info: #a8c7fa;
+  --danger: #f2b8b5;
+  --hover: rgba(227, 227, 227, 0.08);
+  --glass: rgba(30, 31, 32, 0.82);
+  --glass-blur: 12px;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --ring: 0 0 0 1px var(--border);
+  --focus-ring: 0 0 0 2px rgba(168, 199, 250, 0.55);
+  --signal: #a8c7fa;
+  --signal-hover: #d3e3fd;
+  --signal-tint: rgba(168, 199, 250, 0.12);
+  --rule: rgba(255, 255, 255, 0.11);
+  --rule-shadow: none;
+  --chart-1: #8ab4f8;
+  --chart-2: #f28b82;
+  --chart-3: #fdd663;
+  --chart-4: #81c995;
+  --chart-5: #d7aefb;
+  --chart-6: #78d9ec;
+  --chart-7: #fcad70;
+  --chart-8: #bdc1c6;
+  --status-backlog: #9aa0a6;
+  --status-progress: #8ab4f8;
+  --status-review: #fdd663;
+  --status-done: #81c995;
+  --shadow-popover: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-dialog: 0 20px 60px rgba(0, 0, 0, 0.6);
+}
+
+/* ── signal-ink (ported verbatim from the shipped viewer theme Layer 1 —
+      proof the console takes any contract-shaped theme) ──────────────────── */
+
+html[data-theme="signal-ink"][data-mode="dark"] {
+  color-scheme: dark;
+  --bg: #0b0e14;
+  --surface: #11151d;
+  --surface-2: #171c26;
+  --border: #232a37;
+  --text: #dde3ea;
+  --text-dim: #a3adbb;
+  --text-mute: #7c8695;
+  --accent: #e8b04b;
+  --accent-soft: color-mix(in srgb, #e8b04b 16%, transparent);
+  --on-accent: #171004;
+  --signal: #e8b04b;
+  --signal-hover: #f2c26a;
+  --signal-tint: color-mix(in srgb, #e8b04b 10%, transparent);
+  --ok: #8fc796;
+  --warn: #dcae52;
+  --danger: #e08d82;
+  --info: #8db8e0;
+  --hover: color-mix(in srgb, #dde3ea 6%, transparent);
+  --focus-ring: 0 0 0 2px color-mix(in srgb, #e8b04b 55%, transparent);
+  --ring: 0 0 0 1px var(--border);
+  --rule: var(--border);
+  --rule-shadow: none;
+  --shadow: none;
+  --shadow-popover: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-dialog: 0 20px 60px rgba(0, 0, 0, 0.6);
+  --glass: color-mix(in srgb, #11151d 82%, transparent);
+  --glass-blur: 8px;
+  --status-backlog: #7c8695;
+  --status-progress: #8db8e0;
+  --status-review: #dcae52;
+  --status-done: #8fc796;
+  --chart-1: #e8b04b;
+  --chart-2: #8db8e0;
+  --chart-3: #8fc796;
+  --chart-4: #e08d82;
+  --chart-5: #b79ce0;
+  --chart-6: #6fc7bd;
+  --chart-7: #d98cb3;
+  --chart-8: #a8b36a;
+}
+
+html[data-theme="signal-ink"][data-mode="light"] {
+  color-scheme: light;
+  --bg: #f7f6f2;
+  --surface: #fffdf9;
+  --surface-2: #efede7;
+  --border: #e0dcd2;
+  --text: #1a1d23;
+  --text-dim: #4d5560;
+  --text-mute: #6b7480;
+  --accent: #8a5b13;
+  --accent-soft: color-mix(in srgb, #8a5b13 14%, transparent);
+  --on-accent: #fffdf9;
+  --signal: #8a5b13;
+  --signal-hover: #6e4407;
+  --signal-tint: color-mix(in srgb, #8a5b13 8%, transparent);
+  --ok: #34693d;
+  --warn: #8a5b13;
+  --danger: #a33d31;
+  --info: #2d5f8a;
+  --hover: color-mix(in srgb, #1a1d23 5%, transparent);
+  --focus-ring: 0 0 0 2px color-mix(in srgb, #8a5b13 45%, transparent);
+  --ring: 0 0 0 1px var(--border);
+  --rule: var(--border);
+  --rule-shadow: none;
+  --shadow: none;
+  --shadow-popover: 0 8px 24px rgba(26, 29, 35, 0.14);
+  --shadow-dialog: 0 20px 60px rgba(26, 29, 35, 0.22);
+  --glass: color-mix(in srgb, #fffdf9 82%, transparent);
+  --glass-blur: 8px;
+  --status-backlog: #6b7480;
+  --status-progress: #2d5f8a;
+  --status-review: #8a5b13;
+  --status-done: #34693d;
+  --chart-1: #8a5b13;
+  --chart-2: #2d5f8a;
+  --chart-3: #34693d;
+  --chart-4: #a33d31;
+  --chart-5: #6a4b9b;
+  --chart-6: #1f7a6e;
+  --chart-7: #a04a77;
+  --chart-8: #5d6a1e;
+}
