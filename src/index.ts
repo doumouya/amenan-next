@@ -55,6 +55,11 @@ export type {
 
 export { EmptyRegion } from "./shell/EmptyRegion";
 
+// the anchored floating panel — fixed-position (survives overflow-hidden cards), veiled,
+// Esc-on-capture, --entrance motion. The config doors and (soon) the rail's style popover ride it.
+export { Popover } from "./shell/Popover";
+export type { PopoverProps } from "./shell/Popover";
+
 // ── the icon primitive ───────────────────────────────────────────────────────────────────────
 // The code home of the Figma `icon/ms/*` family. Exported because a consumer's own chrome (its
 // footer, its surfaces) must render glyphs through the SAME subsetted-font mechanism, or it will

@@ -62,16 +62,21 @@ export function CodeBlock({
 
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-surface-2">
-      <div className="flex items-center gap-2 border-b border-rule px-3 py-1.5">
+      <div className="flex items-center gap-2 px-3 py-2">
         <span className="text-label-sm text-mute">{lang ? label(lang) : ""}</span>
         <div className="flex-1" />
+        {/* icon-only (Em's ruling: copy explains itself); the label survives as the accessible
+            name + tooltip, and the copied state still answers — the glyph swaps to a check */}
         <button
           type="button"
           onClick={copy}
-          className="flex items-center gap-1 rounded-md px-2 py-1 text-label-md text-dim hover:bg-hover hover:text-ink"
+          aria-label={copied ? l.copied : l.copy}
+          title={copied ? l.copied : l.copy}
+          className={`group flex h-7 items-center justify-center rounded-md px-2 ${
+            copied ? "text-ok" : "text-dim hover:bg-hover hover:text-ink"
+          }`}
         >
-          <Symbol name={copied ? "check" : "content_copy"} size="1rem" />
-          {copied ? l.copied : l.copy}
+          <Symbol name={copied ? "check" : "content_copy"} size="1rem" className="transition-transform duration-[var(--fast)] group-hover:scale-110 group-active:scale-90" />
         </button>
       </div>
       <pre className="overflow-x-auto px-3 py-2 font-mono text-body-sm text-ink">{code}</pre>

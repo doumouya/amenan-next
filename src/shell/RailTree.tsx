@@ -450,7 +450,7 @@ export function RailTree({
         {colour && p.colour && (
           <span
             aria-hidden
-            className="h-4 w-0.5 shrink-0 rounded-[1px]"
+            className="h-4 w-0.5 shrink-0 rounded-full"
             style={{ background: p.colour }}
           />
         )}

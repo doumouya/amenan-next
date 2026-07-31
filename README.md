@@ -23,7 +23,11 @@ It is the successor to [`amenan-ui`](../amenan-ui) (vanilla TS, **frozen**, pull
 5. **The five regions are ALWAYS present.** An unfilled region shows an empty state, never a collapse — a console's identity is its constant chrome.
 6. **`retracted` is a STATE, not a component.** Splitting it meant two places to get the same chrome wrong.
 7. **Surfaces are kept alive.** Hide with `visibility:hidden` + `inert` + `aria-hidden`; never `display:none`, which drops layout and resets inner scroll offsets.
-8. **No persisted state may shape the first client render.** One text mismatch anywhere makes React regenerate the tree and strip the pre-paint theme attributes.
+8. **The design language is written and guarded** — [docs/DESIGN.md](docs/DESIGN.md): the noun
+   becomes the verb (icon-first, less to translate), flat surfaces with one opaque ground, four
+   scales with one home each (spacing derived from the grid token, type roles, per-theme radii,
+   motion tokens), two micro-gestures. Census R9–R12 enforce the scales; /specimen judges the rest.
+9. **No persisted state may shape the first client render.** One text mismatch anywhere makes React regenerate the tree and strip the pre-paint theme attributes.
 
 ## Where the design lives
 

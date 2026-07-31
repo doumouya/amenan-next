@@ -10,6 +10,19 @@
    there is the census of the two blocks below; adding a third look means a block here, a line
    there, and nothing else. */
 
+/* ── motion (theme-independent; a theme MAY retune them like it retunes radii) ──────────
+   Found missing the hard way: components shipped `duration-[var(--fast)]` from the donor and
+   no theme ever defined --fast — an undefined custom property makes the transition silently
+   INSTANT, the same failure class as the --surface-1 transparent-fills episode. These three are
+   the design language's whole motion vocabulary (docs/DESIGN.md): --fast for glyph/hover
+   micro-response, --med for surface properties (background, border, transform), --entrance for
+   anything that APPEARS (popovers, dialogs: 180–220ms fade + ~240ms scale). */
+:root {
+  --fast: 150ms;
+  --med: 200ms;
+  --entrance: 240ms;
+}
+
 /* ── per-theme constants (shared by both modes) ─────────────────────────── */
 
 html[data-theme="datacore"] {

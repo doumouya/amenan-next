@@ -35,7 +35,7 @@ function inline(text: string, keyBase: string): ReactNode[] {
     const key = `${keyBase}-${k++}`;
     if (m[1] !== undefined) {
       out.push(
-        createElement("code", { key, className: "rounded bg-surface-2 px-1 font-mono text-[0.9em]" }, m[1]),
+        createElement("code", { key, className: "rounded-sm bg-surface-2 px-1 font-mono text-[0.9em]" }, m[1]),
       );
     } else if (m[2] !== undefined) {
       out.push(createElement("strong", { key, className: "font-semibold text-ink" }, m[2]));
@@ -82,18 +82,18 @@ function table(lines: string[], key: string): ReactNode {
     { key, className: "overflow-x-auto" },
     createElement("table", { className: "w-full text-body-sm" }, [
       createElement("thead", { key: "h" },
-        createElement("tr", { className: "border-b border-rule" },
+        createElement("tr", { className: "h-10 border-b border-rule" },
           head.map((c, j) => createElement("th", {
             key: j,
-            className: `px-3 py-2 text-label-md text-mute ${numeric[j] ? "text-right" : "text-left"}`,
+            className: `px-4 text-label-md font-normal text-mute ${numeric[j] ? "text-right" : "text-left"}`,
           }, inline(c, `${key}-h${j}`))),
         ),
       ),
       createElement("tbody", { key: "b" },
-        body.map((r, i) => createElement("tr", { key: i, className: "border-b border-rule" },
+        body.map((r, i) => createElement("tr", { key: i, className: "h-12 border-b border-rule hover:bg-hover" },
           head.map((_, j) => createElement("td", {
             key: j,
-            className: `px-3 py-2 text-ink ${numeric[j] ? "num text-right" : ""}`,
+            className: `px-4 text-ink ${numeric[j] ? "num text-right" : ""}`,
             ...(numeric[j] ? { "data-tabular": true } : {}),
           }, inline(r[j] ?? "", `${key}-${i}-${j}`))),
         )),

@@ -520,6 +520,49 @@ if uncovered:
             % (len(uncovered), rel(uncovered[0]), rel(THEME),
                ', '.join(rel(r) for r in source_roots) or 'none declared'))
 
+# ── R9 · Tailwind's step is DERIVED from the grid token, never a literal ─────────────────────
+# Em's ruling after the 0.30rem episode: a hardcoded --spacing is a second home for the minor
+# grid — it drifted 20% off once and every integer utility silently left the rhythm. The bridge
+# must READ grid.css's --bl-h, so retuning the rhythm is a grid change reviewed as one.
+bridge_path = os.path.join(THEME, 'bridge.css')
+if os.path.isfile(bridge_path):
+    bridge_css = strip_css(read(bridge_path))
+    spacing_decls = re.findall(r'--spacing\s*:\s*([^;]+);', bridge_css)
+    if not spacing_decls:
+        finding('R9', 'src/theme/bridge.css declares no --spacing — Tailwind falls back to its own '
+                      'default, which happens to equal --bl-h TODAY and silently decouples from it '
+                      'the day the grid retunes')
+    else:
+        for v in spacing_decls:
+            if v.strip() != 'var(--bl-h)':
+                finding('R9', 'src/theme/bridge.css sets --spacing to `%s` — a literal is a second '
+                              'home for the minor grid (the 0.30rem episode: every integer utility '
+                              'drifted 20%%, no gate saw it). It must be var(--bl-h).' % v.strip())
+
+# ── R10/R11/R12 · the scale laws read the class tokens (docs/DESIGN.md) ──────────────────────
+# Absolute arbitrary font sizes (em stays legal: it is contextual, not a minted level), arbitrary
+# radii (the per-theme --radius-* scale is the only radius vocabulary), and millisecond literals
+# in motion utilities (the motion vocabulary is --fast/--med/--entrance). Each is the same defect:
+# a value minted at the call site instead of drawn from the one scale the theme owns.
+SCALE_RULES = [
+    ('R10', re.compile(r'^text-\[[0-9][^\]]*(?:px|rem)\]$'),
+     'mints the font size `%s` — the type scale is 4–5 ROLES (type.css), not per-call sizes; '
+     'em-relative is the one legal escape because it scales with its context'),
+    ('R11', re.compile(r'^rounded(?:-[a-z]+)?-\[[^\]]+\]$'),
+     'mints the radius `%s` — the radius vocabulary is the per-theme token scale '
+     '(--radius-sm/md/lg/xl, 4/8/12/16 in datacore); an arbitrary radius is a value no theme '
+     'can retune'),
+    ('R12', re.compile(r'^(?:duration|delay)-\[[0-9][^\]]*\]$'),
+     'mints the duration `%s` — motion rides the three tokens (--fast/--med/--entrance, '
+     'contract.css); a millisecond literal is timing no theme or a11y setting can govern'),
+]
+for p2 in shipped_src:
+    for lit in code[p2][1]:
+        for tok in lit.split():
+            for tag, rx, msg in SCALE_RULES:
+                if rx.match(tok):
+                    finding(tag, ('%s ' + msg) % (rel(p2), tok))
+
 if not fails:
     print('component-census: clean (%d components — %d exported and in the barrel, %d '
           'file-private; %d source file(s), %d css file(s), %d custom variant(s) declared, '
@@ -548,7 +591,7 @@ expect() { # $1 = the finding TAG ITSELF, $2 = expected count, $3 = what was pla
 }
 only() { # $1 = the tag that may fire, $2 = its count, $3 = what was planted
   expect "$1" "$2" "$3"
-  for t in '[R0]' '[R1]' '[R2]' '[R3]' '[R4]' '[R5]' '[R6]' '[R7]' '[R8]'; do
+  for t in '[R0]' '[R1]' '[R2]' '[R3]' '[R4]' '[R5]' '[R6]' '[R7]' '[R8]' '[R9]' '[R10]' '[R11]' '[R12]'; do
     [ "$t" = "$1" ] || expect "$t" 0 "$3 — $t must stay silent"
   done
 }
@@ -589,7 +632,7 @@ TS
 @source "../**/*.{ts,tsx}";
 @source not "../**/__tests__/**";
 @custom-variant short { @media (max-height: 40rem) { @slot; } }
-@theme inline { --color-bg: var(--bg); }
+@theme inline { --color-bg: var(--bg); --spacing: var(--bl-h); }
 CSS
 }
 
@@ -733,7 +776,7 @@ only '[R6]' 1 'a variant no @custom-variant declares'
 clean
 cat >"$d/src/theme/bridge.css" <<'CSS'
 @source "../**/*.{ts,tsx}";
-@theme inline { --color-bg: var(--bg); }
+@theme inline { --color-bg: var(--bg); --spacing: var(--bl-h); }
 CSS
 run
 only '[R6]' 1 'the `short` declaration removed while a component still uses `short:py-1`'
@@ -775,9 +818,50 @@ clean
 cat >"$d/src/theme/bridge.css" <<'CSS'
 @source "../shell/**/*.tsx";
 @custom-variant short { @media (max-height: 40rem) { @slot; } }
-@theme inline { --color-bg: var(--bg); }
+@theme inline { --color-bg: var(--bg); --spacing: var(--bl-h); }
 CSS
 run
 only '[R8]' 1 'an @source covering src/shell only — src/lib is shipped platform code too'
+
+# ── R9 · the spacing literal, and the spacing deletion ───────────────────────────────────────
+clean
+sed -i 's/--spacing: var(--bl-h);/--spacing: 0.30rem;/' "$d/src/theme/bridge.css"
+run
+only '[R9]' 1 'a literal --spacing — the 0.30rem episode replayed'
+
+clean
+sed -i 's/ --spacing: var(--bl-h);//' "$d/src/theme/bridge.css"
+run
+only '[R9]' 1 'no --spacing at all — silently decoupled from the grid token'
+
+# ── R10/R11/R12 · a minted size, radius, duration ────────────────────────────────────────────
+clean
+cat >>"$d/src/shell/Beta.tsx" <<'TSX'
+export const T = "text-[13px]";
+TSX
+run
+only '[R10]' 1 'an absolute arbitrary font size'
+
+clean
+cat >>"$d/src/shell/Beta.tsx" <<'TSX'
+export const R = "rounded-[3px]";
+TSX
+run
+only '[R11]' 1 'an arbitrary radius'
+
+clean
+cat >>"$d/src/shell/Beta.tsx" <<'TSX'
+export const D = "duration-[200ms]";
+TSX
+run
+only '[R12]' 1 'a millisecond literal in a motion utility'
+
+# and the legal escapes must stay silent: em type, token-var duration
+clean
+cat >>"$d/src/shell/Beta.tsx" <<'TSX'
+export const OK = "text-[0.9em] duration-[var(--fast)] rounded-sm";
+TSX
+run
+only '[R0]' 0 'the legal escapes — em sizes and var() durations are not findings'
 
 check "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

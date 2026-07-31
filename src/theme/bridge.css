@@ -56,8 +56,16 @@
 
 @theme inline {
   --color-bg: var(--bg);
-  --color-surface: var(--surface);
-  --color-surface-2: var(--surface-2);
+  /* FLAT BY DESIGN (Em's direction, 2026-07-31): the surface fills are GONE — chrome and cards
+     sit directly on the page ground, distinguished by border and rhythm, not by tint. Spelled
+     `transparent` on purpose rather than an unresolvable var(): an undefined token is also
+     transparent, but by MALFUNCTION (invalid at computed-value time, and differently per
+     property), and the difference matters the day someone greps for why.
+     The corollary: anything that FLOATS (popovers, menus) or STICKS (a table header rows slide
+     beneath) cannot ride these utilities — it stands on `bg-bg`, the one opaque ground a flat
+     design keeps. To bring the levels back: var(--surface) / var(--surface-2). */
+  --color-surface: transparent;
+  --color-surface-2: transparent;
   --color-border: var(--border);
   /* --hover has been in the contract since the start but was never bridged, which is why every
      hover state in the donor console was either hand-rolled or missing: a token nothing maps is
@@ -105,5 +113,36 @@
   --font-sans: var(--font);
   --font-mono: var(--font-mono);
 
-  --spacing: 0.25rem;
+  /* DERIVED, never hardcoded (Em's ruling): Tailwind's base step IS the house minor grid, so it
+     reads the grid's own token — one home (grid.css --bl-h), and retuning the rhythm is a change
+     to the grid, reviewed as one, never a magic number here. The census guards the derivation. */
+  --spacing: var(--bl-h);
+}
+
+/* The micro-transition floor (docs/DESIGN.md): every interactive element answers hover/focus with
+   the same easing, so motion is a property of the SYSTEM, not of whichever component remembered.
+   @layer base, so any utility still wins; transform is in the list because the lift/scale
+   micro-animations ride it. */
+/* the entrance keyframes (docs/DESIGN.md: anything that APPEARS fades+scales at --entrance) */
+@keyframes an-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+
+@layer base {
+  button,
+  input,
+  select,
+  textarea,
+  [role="button"] {
+    transition:
+      background-color var(--med) ease,
+      border-color var(--med) ease,
+      color var(--med) ease,
+      opacity var(--fast) ease,
+      box-shadow var(--med) ease,
+      transform var(--fast) ease;
+  }
 }
