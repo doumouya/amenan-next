@@ -72,3 +72,33 @@ export {
 export type { RegionsSpec, ComposerSpec, ComposerAction } from "./lib/regions";
 
 export type { Completion, CompletionItem } from "./lib/completion";
+
+// ── the thread renderers (the one-interface arc) ─────────────────────────────────────────────
+// What a conversation's cards are MADE of — the tabular result, the chart, the code block, the
+// markdown-lite reply — promoted from datacore so both consumers render the same thread. The
+// entry CARDS stay with each consumer: they carry app nouns (planes, save/export targets), and
+// a card frame designed with one consumer is a guess about the second.
+export { ResultTable, KpiStrip, DEFAULT_RESULT_TABLE_LABELS } from "./thread/ResultTable";
+export type { ResultTableLabels } from "./thread/ResultTable";
+
+export { ResultChart, DEFAULT_RESULT_CHART_LABELS } from "./thread/ResultChart";
+export type { ResultChartLabels, ChartMode } from "./thread/ResultChart";
+
+export { CodeBlock, DEFAULT_CODE_BLOCK_LABELS } from "./thread/CodeBlock";
+export type { CodeBlockLabels } from "./thread/CodeBlock";
+
+export { renderMarkdownLite } from "./thread/markdown";
+export type { MarkdownOptions } from "./thread/markdown";
+
+export { highlightSql } from "./thread/highlight";
+
+export {
+  toTabular,
+  numericMeta,
+  isKpi,
+  isChartable,
+  chartSeries,
+  CHART_MAX_SEGMENTS,
+  defaultFormatNumber,
+} from "./thread/result";
+export type { TabularResult, NumberFormatter } from "./thread/result";

@@ -49,3 +49,10 @@ edit
 tag
 visibility
 visibility_off
+
+# ── used by thread/CodeBlock (the Copy affordance) — BOTH in the donor census already, and both
+#    repeated here because this census lists what THIS repo's components render, not what some
+#    consumer happens to have. (`check` also appears in the RailTree section above; a duplicate
+#    line costs nothing and each section stays a true statement about its component.) ──────────
+check
+content_copy

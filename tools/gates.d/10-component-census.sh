@@ -3,10 +3,13 @@
 # cannot see in its own tests.
 #
 # SCOPE, declared once so a rule is never quietly pointed at half the tree:
-#   · the CENSUS rules (R1·R2·R3) walk `src/shell/**` — the component tier — and `src/index.ts`.
-#   · the LEAK rules (R4·R5·R6) walk `src/shell/**` AND `src/lib/**`. Both are shipped platform
-#     code with the same obligations; a rule that walks only `src/shell` is half a rule, which is
-#     the single most common defect in the sibling suite.
+#   · the CENSUS rules (R1·R2·R3) walk the COMPONENT roots — `src/shell/**` and `src/thread/**`
+#     (the thread renderers joined in the one-interface arc) — and `src/index.ts`.
+#   · the LEAK rules (R4·R5·R6) and R8 walk the SHIPPED roots: the component roots AND
+#     `src/lib/**`. All of it is shipped platform code with the same obligations; a rule that
+#     walks only `src/shell` is half a rule, which is the single most common defect in the
+#     sibling suite — and adding a root here without adding it to `component_src`/`shipped_src`
+#     below recreates it.
 #   · R7 walks ALL of `src/**` including `src/theme/**`, because the live instance of that leak
 #     was in the theme tier (`dc-theme` in theme.ts, `.dc-gridguide` in grid.css).
 #   · `__tests__` directories are OUT of every rule: they are not the tier's public surface, and a
@@ -50,6 +53,7 @@ import sys
 root = sys.argv[1]
 SRC = os.path.join(root, 'src')
 SHELL = os.path.join(SRC, 'shell')
+THREAD = os.path.join(SRC, 'thread')
 LIB = os.path.join(SRC, 'lib')
 THEME = os.path.join(SRC, 'theme')
 BARREL = os.path.join(SRC, 'index.ts')
@@ -200,8 +204,12 @@ def css_files():
 
 
 shell_src = sources(SHELL)
+thread_src = sources(THREAD)
 lib_src = sources(LIB)
 all_src = sources(SRC)
+# the two composite scopes every rule below is phrased in — see the SCOPE note in the header
+component_src = shell_src + thread_src
+shipped_src = component_src + lib_src
 code = {p: scan(read(p)) for p in all_src}
 css = css_files()
 
@@ -269,7 +277,7 @@ if not barrel_ok:
     finding('R0', '%s not found — the barrel IS the public surface this gate censuses; without it '
                   'R1 and R2 have nothing to compare against and would report clean'
             % rel(BARREL))
-if not (shell_src or lib_src):
+if not shipped_src:
     finding('R0', 'no .ts/.tsx sources under %s or %s — the leak rules scanned nothing and would '
                   'report clean over an empty or mis-rooted tree' % (rel(SHELL), rel(LIB)))
 if not css:
@@ -301,7 +309,7 @@ for spec, src_name, _pub in barrel_entries:
 star_modules = {resolve(spec, SRC) for spec in barrel_stars}
 
 n_components = n_exported = n_private = 0
-for p in shell_src:
+for p in component_src:
     body = code[p][0]
     comps = components_of(body)
     exported = exported_names(body)
@@ -337,13 +345,13 @@ for spec, src_name, pub_name in barrel_entries:
                       'phantom barrel entry is a public surface that does not exist'
                 % (src_name, spec, rel(target)))
 
-if shell_src and n_components == 0:
-    finding('R0', 'no components found in %d file(s) under %s — the component recogniser has '
+if component_src and n_components == 0:
+    finding('R0', 'no components found in %d file(s) under %s/%s — the component recogniser has '
                   'stopped matching, so R1 and R3 census an empty set and report clean'
-            % (len(shell_src), rel(SHELL)))
+            % (len(component_src), rel(SHELL), rel(THREAD)))
 
 # ── R4 · no consumer, no app alias, no framework ─────────────────────────────────────────────
-for p in shell_src + lib_src:
+for p in shipped_src:
     body = code[p][0]
     for m in IMPORT_FROM.finditer(body):
         spec = m.group(1)
@@ -370,7 +378,7 @@ for p in shell_src + lib_src:
 
 # ── R5 · no raw colour outside src/theme ─────────────────────────────────────────────────────
 COLOUR = re.compile(r'#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(')
-for p in shell_src + lib_src:
+for p in shipped_src:
     body = code[p][0]
     for m in COLOUR.finditer(body):
         line = body[:m.start()].count('\n') + 1
@@ -425,7 +433,7 @@ def split_top(tok):
 
 n_tokens = 0
 used = {}
-for p in shell_src + lib_src:
+for p in shipped_src:
     for lit in code[p][1]:
         for tok in lit.split():
             if not tok or tok[0] not in 'abcdefghijklmnopqrstuvwxyz!-':
@@ -450,10 +458,10 @@ for v, (p, tok) in sorted(used.items()):
                       'silently absent while every test stays green.'
                 % (rel(p), v, tok, rel(THEME)))
 
-if (shell_src or lib_src) and n_tokens == 0:
+if shipped_src and n_tokens == 0:
     finding('R0', 'not one class token was extracted from %d source file(s) — R5 and R6 read the '
                   'same literals, so a class scanner that has stopped seeing anything makes both '
-                  'rules silently vacuous' % len(shell_src + lib_src))
+                  'rules silently vacuous' % len(shipped_src))
 
 # ── R7 · no consumer namespace prefix minted in a shared tier ────────────────────────────────
 LEAK = re.compile(r'\b(%s)[a-z]' % '|'.join(re.escape(x) for x in LEAKED_PREFIXES))
@@ -501,7 +509,7 @@ for p in css:
         base = pat[:cut].rsplit('/', 1)[0] if cut < len(pat) else pat
         source_roots.append(os.path.normpath(os.path.join(os.path.dirname(p), base or '.')))
 
-uncovered = [p for p in shell_src + lib_src
+uncovered = [p for p in shipped_src
              if not any(p == r or p.startswith(r + os.sep) for r in source_roots)]
 if uncovered:
     finding('R8', '%d shipped file(s) — e.g. %s — lie outside every `@source` root declared in %s '
@@ -516,7 +524,7 @@ if not fails:
     print('component-census: clean (%d components — %d exported and in the barrel, %d '
           'file-private; %d source file(s), %d css file(s), %d custom variant(s) declared, '
           '%d class token(s) read, %d @source root(s))'
-          % (n_components, n_exported, n_private, len(shell_src + lib_src), len(css),
+          % (n_components, n_exported, n_private, len(shipped_src), len(css),
              len(declared), n_tokens, len(source_roots)))
 sys.exit(1 if fails else 0)
 PY
@@ -546,12 +554,18 @@ only() { # $1 = the tag that may fire, $2 = its count, $3 = what was planted
 }
 
 clean() {
-  rm -rf "$d"; mkdir -p "$d/src/shell" "$d/src/lib" "$d/src/theme"
+  rm -rf "$d"; mkdir -p "$d/src/shell" "$d/src/lib" "$d/src/thread" "$d/src/theme"
   cat >"$d/src/index.ts" <<'TS'
 export { Alpha } from "./shell/Alpha";
 export { Beta, BETA_ICON } from "./shell/Beta";
+export { Gamma } from "./thread/Gamma";
 export type { Spec } from "./lib/store";
 TS
+  cat >"$d/src/thread/Gamma.tsx" <<'TSX'
+export function Gamma() {
+  return <table className="w-full text-body-sm max-h-96" />;
+}
+TSX
   cat >"$d/src/shell/Alpha.tsx" <<'TSX'
 import { useState } from "react";
 export function Alpha() {
@@ -603,6 +617,24 @@ run
 expect '[R0]' 1 'the barrel deleted — exactly the "cannot compare" guard'
 expect '[R1]' 0 'the barrel deleted — R1 is unknowable and must not guess'
 expect '[R2]' 0 'the barrel deleted — R2 has nothing to walk'
+
+# ── the thread root is CENSUSED, not tolerated ───────────────────────────────────────────────
+# One plant per rule family inside src/thread. Without these, widening the scope is a claim the
+# self-test never checks — precisely how a walked-root list rots (the sibling suite's most common
+# defect, imported here with the renderers).
+clean
+cat >"$d/src/thread/Delta.tsx" <<'TSX'
+export function Delta() { return <div className="p-4" />; }
+TSX
+run
+expect '[R1]' 1 'a thread component the barrel does not re-export — the census walks src/thread'
+
+clean
+cat >>"$d/src/thread/Gamma.tsx" <<'TSX'
+import { plane } from "@/lib/plane";
+TSX
+run
+expect '[R4]' 1 'an app-alias import inside src/thread — the leak rules walk it too'
 
 # ── R1 · a component the barrel does not re-export ───────────────────────────────────────────
 clean
