@@ -43,8 +43,17 @@ gestures and only these two:
 - **the lift** — text-bearing chips rise 1px on hover (`hover:-translate-y-px active:translate-y-0`);
 - **the glyph scale** — icon-only buttons scale their glyph (`group-hover:scale-110
   group-active:scale-90`), the rec-mic family of feedback.
+- **the size glide** (2026-07-31) — chrome that changes SIZE (a panel retracting, a row
+  revealing) transitions `width`/`height` at `--med`/`--ease`, never pops. The global door is
+  `interpolate-size: allow-keywords` on `:root` (bridge.css) so `auto` endpoints interpolate; a
+  swap between two elements glides via `starting:` (`@starting-style`) from the other's size
+  (the panels), and a collapsed row is height-0 + `inert`, never unmounted (the composer). When
+  a neighbour must hold still through the glide, RESERVE the delta as margin at rest and release
+  it in the same transition — equal duration and ease make the sum constant on every frame (the
+  composer's field). Engines without interpolate-size render end states instantly: motion is
+  enhancement, never load-bearing.
 
-Motion is a property of the SYSTEM: if a component needs a third gesture, it comes here first.
+Motion is a property of the SYSTEM: if a component needs a fourth gesture, it comes here first.
 
 ## Hierarchy
 

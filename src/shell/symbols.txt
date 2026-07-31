@@ -30,6 +30,9 @@ keyboard_tab
 left_panel_open
 open_in_full
 widgets
+# the Composer's more_vert door (2026-07-31, the one-row resting state) — NOT in the donor
+# census; a consumer adopting the composer must add it and re-subset, or the door paints as prose:
+more_vert
 
 # ── used by RailTree — NEW. RailTree has no datacore donor (its rail is a flat read-only stack),
 #    so none of these were ever demanded by that console and none are in its census. A consumer

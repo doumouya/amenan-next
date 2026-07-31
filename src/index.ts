@@ -31,7 +31,7 @@ export { SurfaceHost, SurfaceActiveContext, useSurfaceActive } from "./shell/Sur
 export type { SurfaceDef } from "./shell/SurfaceHost";
 
 export { Composer, DEFAULT_COMPOSER_LABELS } from "./shell/Composer";
-export type { ComposerProps, ComposerLabels } from "./shell/Composer";
+export type { ComposerProps, ComposerLabels, ComposerModeIcon } from "./shell/Composer";
 
 export {
   RailTree,

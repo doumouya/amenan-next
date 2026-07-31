@@ -192,7 +192,9 @@ export function RightPanel({
     return (
       <aside
         id={id}
-        className="flex h-full w-10 shrink-0 flex-col items-center border-l border-rule bg-bg max-lg:hidden"
+        // the size-change gesture (bridge.css): the strip mounts at the panel's width and eases
+        // down — the swap's other direction lives on the docked panel below
+        className="flex h-full w-10 shrink-0 flex-col items-center overflow-hidden border-l border-rule bg-bg transition-[width] duration-[var(--med)] ease-[var(--ease)] max-lg:hidden lg:starting:w-[var(--context-w)]"
       >
         <button
           onClick={() => onEvent("reopen")}
@@ -215,10 +217,22 @@ export function RightPanel({
   return (
     <aside
       id={id}
+      // the KEY is the animation (the size-glide gesture): docked→full changes this same
+      // element's positioning scheme (in-flow → absolute), which no transition can interpolate —
+      // so the full overlay is a DIFFERENT element identity, and @starting-style sweeps its left
+      // edge in from the docked position. Exit needs no key: full→docked remounts the in-flow
+      // panel, whose starting width (40px) grows it back like any reopen. (No class NAMES in
+      // this comment on purpose — the scanner reads comments too, and a name here ships a rule.)
+      //
+      // THE SPACE BEFORE ${sheetClosed} IS LOAD-BEARING: the scanner rejects a candidate that
+      // touches an interpolation as runtime-built (`text-${x}` must never compile), so a class
+      // ending at `${` silently never exists — which is exactly how both starting widths here
+      // shipped as no-ops the first time.
+      key={full ? "ctx-full" : "ctx-flow"}
       className={
         full
-          ? `absolute inset-0 z-[var(--z-side-panel)] flex flex-col border-l border-rule bg-bg${sheetClosed}`
-          : `flex w-[var(--context-w)] shrink-0 flex-col overflow-hidden border-l border-rule bg-bg transition-[width,transform] duration-150 ease-[var(--ease)] max-lg:fixed max-lg:inset-y-0 max-lg:right-0 max-lg:z-[var(--z-side-panel)] max-lg:shadow-dialog max-md:order-2${sheetClosed}`
+          ? `absolute inset-0 z-[var(--z-side-panel)] flex flex-col border-l border-rule bg-bg transition-[left,transform] duration-[var(--med)] ease-[var(--ease)] lg:starting:left-[calc(100%_-_var(--context-w))] ${sheetClosed}`
+          : `flex w-[var(--context-w)] shrink-0 flex-col overflow-hidden border-l border-rule bg-bg transition-[width,transform] duration-[var(--med)] ease-[var(--ease)] max-lg:fixed max-lg:inset-y-0 max-lg:right-0 max-lg:z-[var(--z-side-panel)] max-lg:shadow-dialog max-md:order-2 lg:starting:w-10 ${sheetClosed}`
       }
     >
       {/* A CENTRED CLUSTER with no title. The rule under it was a border inside a region; the

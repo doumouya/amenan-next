@@ -19,8 +19,12 @@
 // runs something else, and this one is the AI front door on every page.
 //
 // FOUR THINGS THAT LOOK LIKE STYLE AND ARE NOT:
-//  · TWO ROWS. It was one row, which capped the field at whatever the icons left over — 260px at
-//    the presentation window with eight controls competing for the rest.
+//  · ONE ROW RESTING, TWO ON DEMAND (Em's 2026-07-31 ruling, superseding the always-two-rows
+//    cut). The resting row carries the mode identity, the field, and at most two controls —
+//    `trailing` plus the more_vert door — so the field keeps the room that motivated two rows
+//    (the original failure was EIGHT controls competing with it, not the row count). The full
+//    control row exists behind the door; `expanded` is component-local view state (the
+//    chart-toggle argument: a reload restores your draft, not which chrome you had open).
 //  · The DRAWN placeholder (see the spec above). `aria-describedby` carries the hint to assistive
 //    tech, which is stronger semantics than a placeholder anyway.
 //  · The field, the mirrored <pre> and the drawn placeholder carry the SAME padding. They are
@@ -63,13 +67,25 @@ export interface ComposerLabels {
   field: string;
   newline: string;
   accept: string;
+  /** the more_vert door, closed / open */
+  more: string;
+  less: string;
 }
 
 export const DEFAULT_COMPOSER_LABELS: ComposerLabels = {
   field: "Composer",
   newline: "New line",
   accept: "Accept completion",
+  more: "More options",
+  less: "Fewer options",
 };
+
+/** the resting row's left identity — the SELECTED mode's own mark (a brand `img` or a glyph) */
+export interface ComposerModeIcon {
+  img?: string;
+  icon?: string;
+  title: string;
+}
 
 export interface ComposerProps {
   placeholder: string;
@@ -101,6 +117,14 @@ export interface ComposerProps {
   highlight?: (text: string) => ReactNode;
   /** show the top completion's tail inline, when the caret sits at the very end */
   ghost?: boolean;
+  /** the selected mode's mark, shown at the resting row's left edge (falls back to `prompt`) */
+  modeIcon?: ComposerModeIcon;
+  /**
+   * Actions that stay ON the resting row, far right, beside the more_vert door — the one or two
+   * things worth a permanent seat (datacore passes the mic). Everything else lives in `actions`
+   * behind the door.
+   */
+  trailing?: ComposerAction[];
   labels?: Partial<ComposerLabels>;
 }
 
@@ -117,6 +141,8 @@ export function Composer({
   compute,
   highlight,
   ghost = false,
+  modeIcon,
+  trailing = [],
   labels,
 }: ComposerProps) {
   const l = { ...DEFAULT_COMPOSER_LABELS, ...labels };
@@ -125,6 +151,9 @@ export function Composer({
   const setDraft = onChange ?? setInner;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // the more_vert door — view state, component-local on purpose (see the header)
+  const [expanded, setExpanded] = useState(false);
+  const hasRow2 = !!attach || actions.length > 0 || favorites.length > 0;
 
   const ref = useRef<HTMLTextAreaElement>(null);
   const preRef = useRef<HTMLPreElement>(null);
@@ -141,7 +170,7 @@ export function Composer({
     const el = ref.current;
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, 180)}px`; // the spike's cap
+    el.style.height = `${Math.min(el.scrollHeight, 224)}px`; // the export's ~220, on the grid
     if (preRef.current) preRef.current.style.height = el.style.height;
   }, [draft]);
 
@@ -263,17 +292,40 @@ export function Composer({
         </ul>
       )}
 
-      {/* TWO ROWS INSIDE ONE FRAME. The frame is on the INPUT; the region container stays bg. */}
-      <div className="flex flex-col gap-1 rounded-xl border border-border bg-surface p-2 shadow-[var(--shadow)] transition-[border-color,box-shadow] duration-[var(--fast)] focus-within:border-accent focus-within:shadow-[var(--focus-ring)] short:gap-0.5 short:p-1">
-        {/* ── ROW 1: the prompt and the field, and nothing else ── */}
-        <div className="flex items-start gap-2">
+      {/* ONE ROW RESTING inside one frame; the frame is on the INPUT, the region stays bg.
+          `items-end` is the export's ruling: as the field grows, the identity and the controls
+          stay pinned to the resting line instead of floating mid-frame.
+
+          RESERVE AND RELEASE (Em's ruling: the typing area must not move when the door opens).
+          At rest the frame reserves row 2's exact height as bottom margin (40px: 36px buttons +
+          the 4px row gap); opening releases it while row 2 grows into it. Both run at --med with
+          the same ease, so the sum is constant on EVERY frame of the animation and the field
+          holds still. ≥md only — on a phone the composer sits on the bottom edge, and a
+          permanent 40px of dead space there costs more than the field's rise. */}
+      <div
+        className={`flex flex-col rounded-xl border border-border bg-surface p-3 shadow-[var(--shadow)] transition-[border-color,box-shadow,margin] duration-[var(--med)] ease-[var(--ease)] focus-within:border-accent focus-within:shadow-[var(--focus-ring)] short:p-1.5 ${
+          expanded ? "" : "md:mb-10"
+        }`}
+      >
+        {/* ── ROW 1: the mode identity, the field, the trailing seat(s), the door ── */}
+        <div className="flex items-end gap-1">
           <span
-            className="mt-2 shrink-0 select-none font-mono text-body-md text-signal short:mt-1"
+            className="flex size-9 shrink-0 select-none items-center justify-center font-mono text-body-md text-signal max-md:size-11"
+            title={modeIcon?.title}
             aria-hidden={!busy}
           >
             {/* there is no RUN button (Enter runs), so its busy state lands here — run feedback
                 must not disappear with the control that used to carry it */}
-            {busy ? <Symbol name="hourglass_top" size="1rem" className="animate-pulse" /> : prompt}
+            {busy ? (
+              <Symbol name="hourglass_top" size="1rem" className="animate-pulse" />
+            ) : modeIcon?.img ? (
+              // a brand mark stays an <img>, never a recolored ligature (the icon-tier law)
+              <img src={modeIcon.img} alt="" className="size-[1.125rem]" />
+            ) : modeIcon?.icon ? (
+              <Symbol name={modeIcon.icon} size="1.125rem" />
+            ) : (
+              prompt
+            )}
           </span>
 
           {/* the field + the highlight/ghost overlay share one box */}
@@ -323,6 +375,9 @@ export function Composer({
                 document.dispatchEvent(new CustomEvent("cx-blur"));
               }}
               aria-describedby={!draft && placeholder ? hintId : undefined}
+              // my ring is my frame's: the frame answers focus-within, so the field must not
+              // paint the global :focus-visible ring inside it (bridge.css, the focus policy)
+              data-ring="frame"
               spellCheck={false}
               autoCapitalize="off"
               autoCorrect="off"
@@ -337,41 +392,81 @@ export function Composer({
               }`}
             />
           </div>
-        </div>
 
-        {/* ── ROW 2: the attach door, the composer's own controls, then the pinned apps ── */}
-        <div className="flex items-center gap-0.5">
-          {/* leading, chat-app style. A paperclip rather than a `+`: a `+` promises "more", and
-              there is no more — it opens one door and nothing else. */}
-          {attach && (
+          {/* the trailing seat(s): the one or two controls worth staying on the resting row */}
+          {trailing.map((a) => (
+            <ActionButton key={a.id} action={a} />
+          ))}
+
+          {/* the far corner: the more_vert door — the overflow position every toolbar taught */}
+          {hasRow2 && (
             <button
-              onClick={attach.onClick}
-              title={attach.title}
-              aria-label={attach.title}
-              className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-md text-dim hover:bg-surface-2 hover:text-ink max-md:size-11"
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              title={expanded ? l.less : l.more}
+              aria-label={expanded ? l.less : l.more}
+              aria-expanded={expanded}
+              className={`group flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-md max-md:size-11 ${
+                expanded ? "bg-signal-tint text-signal" : "text-dim hover:bg-hover hover:text-ink"
+              }`}
             >
-              <Symbol name={attach.icon ?? "attach_file"} size="1.375rem" />
+              <Symbol
+                name="more_vert"
+                size="1.125rem"
+                className="transition-transform duration-[var(--fast)] group-hover:scale-110 group-active:scale-90"
+              />
             </button>
           )}
-
-          {/* the declarative action bar. It renders at EVERY width — it used to be hidden below md
-              and duplicated in the touch strip below, and row 2 has the room. */}
-          {actions.map((a) => (
-            <ActionButton key={a.id} action={a} />
-          ))}
-
-          <span className="flex-1" />
-
-          {/* past the spring: the user's additions, not the composer's own verbs */}
-          {favorites.map((a) => (
-            <ActionButton key={a.id} action={a} />
-          ))}
         </div>
+
+        {/* ── ROW 2, behind the door — ALWAYS MOUNTED, collapsed to height 0 (the size-change
+            gesture: 0 → auto rides interpolate-size, bridge.css). `inert` while collapsed, or
+            every hidden control would still be a tab stop inside an overflow-hidden box. The
+            row owns its own top gap (mt-1) so a collapsed row contributes exactly nothing. ── */}
+        {hasRow2 && (
+          <div
+            inert={!expanded}
+            className={`flex items-center gap-0.5 overflow-hidden transition-[height,margin,opacity] duration-[var(--med)] ease-[var(--ease)] ${
+              expanded ? "mt-1 h-auto opacity-100" : "mt-0 h-0 opacity-0"
+            }`}
+          >
+            {/* leading, chat-app style. A paperclip rather than a `+`: a `+` promises "more", and
+                there is no more — it opens one door and nothing else. */}
+            {attach && (
+              <button
+                onClick={attach.onClick}
+                title={attach.title}
+                aria-label={attach.title}
+                className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-md text-dim hover:bg-surface-2 hover:text-ink max-md:size-11"
+              >
+                <Symbol name={attach.icon ?? "attach_file"} size="1.375rem" />
+              </button>
+            )}
+
+            {/* the declarative action bar — every width; row 2 has the room */}
+            {actions.map((a) => (
+              <ActionButton key={a.id} action={a} />
+            ))}
+
+            <span className="flex-1" />
+
+            {/* past the spring: the user's additions, not the composer's own verbs */}
+            {favorites.map((a) => (
+              <ActionButton key={a.id} action={a} />
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* the touch strip: the two keys a soft keyboard cannot send. Only these two — the rest of
-          the bar renders at every width now, so repeating it here would be a duplicate. */}
-      <div className="mt-1 hidden flex-wrap items-center gap-1 max-md:flex">
+      {/* the touch strip: the two keys a soft keyboard cannot send. It rides the SAME door as
+          row 2 — the resting composer is one quiet row on a phone too — and the same collapse
+          gesture, so it eases instead of popping. */}
+      <div
+        inert={!expanded}
+        className={`hidden max-md:flex flex-wrap items-center gap-1 overflow-hidden transition-[height,margin,opacity] duration-[var(--med)] ease-[var(--ease)] ${
+          expanded ? "mt-1 h-auto opacity-100" : "mt-0 h-0 opacity-0"
+        }`}
+      >
         <ActionButton
           action={{
             id: "kb-newline",

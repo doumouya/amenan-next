@@ -96,7 +96,9 @@ export function LeftPanel({
         title={l.expand}
         aria-label={l.expand}
         aria-expanded={false}
-        className="flex h-full w-10 shrink-0 cursor-pointer flex-col items-center border-r border-rule bg-bg pt-2 text-dim hover:text-ink max-md:hidden"
+        // the size-change gesture (bridge.css): retract SWAPS elements, so the glide comes from
+        // @starting-style — the strip mounts at the panel's width and eases down to its own
+        className="flex h-full w-10 shrink-0 cursor-pointer flex-col items-center overflow-hidden border-r border-rule bg-bg pt-2 text-dim transition-[width] duration-[var(--med)] ease-[var(--ease)] hover:text-ink max-md:hidden md:starting:w-[var(--object-rail-w)]"
       >
         <Symbol name="keyboard_double_arrow_right" size="1.25rem" />
       </button>
@@ -106,7 +108,7 @@ export function LeftPanel({
   return (
     <aside
       id={id}
-      className={`flex w-[var(--object-rail-w)] shrink-0 flex-col overflow-hidden border-r border-rule bg-bg transition-transform duration-150 ease-[var(--ease)] max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-[var(--z-side-panel)] max-md:w-[var(--context-w)] max-md:shadow-dialog ${
+      className={`flex w-[var(--object-rail-w)] shrink-0 flex-col overflow-hidden border-r border-rule bg-bg transition-[width,transform] duration-[var(--med)] ease-[var(--ease)] max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-[var(--z-side-panel)] max-md:w-[var(--context-w)] max-md:shadow-dialog md:starting:w-10 ${
         sheetOpen ? "" : "max-md:-translate-x-full"
       }`}
     >

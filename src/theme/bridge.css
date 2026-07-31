@@ -146,3 +146,33 @@
       transform var(--fast) ease;
   }
 }
+
+/* SIZE CHANGES EASE — the third motion gesture (docs/DESIGN.md; Em's 2026-07-31 ruling: one
+   GLOBAL rule, not per-component re-inventions). `interpolate-size: allow-keywords` is the
+   document-level opt-in that lets `auto` endpoints interpolate, so a collapsed row can
+   TRANSITION 0 → auto and a panel can glide between its widths. The property is inherited from
+   the root by design; it changes nothing until an element also declares a transition, which is
+   why it is safe as a global. Elements opt in with `transition-[width|height,…]` at --med /
+   --ease. Chrome (the demo browser) animates; engines without interpolate-size render the end
+   states instantly — motion is enhancement, never load-bearing. NOT `* { transition: … }`: a
+   wildcard size transition would animate every layout reflow (virtualized rows, breakpoint
+   changes), which is jank, not craft. */
+:root {
+  interpolate-size: allow-keywords;
+}
+
+/* The focus policy — PROMOTED from datacore's globals.css (one recipe, one home): every consumer
+   of the tier gets the same ring. Deliberately UN-layered: the ring is an a11y floor, and a
+   layered rule would lose to any `shadow-*` utility on the focused element itself.
+
+   The one escape is `data-ring="frame"`: a control whose FRAME carries the ring. The composer's
+   field lives inside a frame that answers `focus-within` — without the escape the field paints a
+   second ring inside the frame's (Em's 2026-07-31 report). The attribute states the contract
+   ("my ring is my frame's"), so any future framed composite reuses it instead of a one-off. */
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+[data-ring="frame"]:focus-visible {
+  box-shadow: none;
+}
