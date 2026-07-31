@@ -48,6 +48,7 @@
 // day the token moves.
 
 import { useRef, useState, type DragEvent as ReactDragEvent, type ReactNode } from "react";
+import { RailStylePopover } from "./RailStylePopover";
 import { Symbol } from "./Symbol";
 
 // ── the model ────────────────────────────────────────────────────────────────────────────────
@@ -57,6 +58,9 @@ export interface RailChannel {
   name: string;
   /** a Material Symbols ligature; rendered only when the `icons` capability is on */
   icon?: string;
+  /** a CSS colour, normally `var(--chart-N)`; rendered only when the `colour` capability is on —
+   *  the style door offers colour on channels too, so the row must be able to answer */
+  colour?: string;
   hidden?: boolean;
 }
 
@@ -70,6 +74,27 @@ export interface RailProject {
   colour?: string;
   pinned?: boolean;
   hidden?: boolean;
+}
+
+/**
+ * The third row level (the one-interface arc, decision 7): a first-class citizen living UNDER a
+ * project — a saved query, an attached file. `projectId` is required for the same reason
+ * `channelId` is: which project owns it is never guessed. Rendered only when the `assets`
+ * capability is declared.
+ */
+export interface RailAsset {
+  id: string;
+  name: string;
+  projectId: string;
+  icon?: string;
+  hidden?: boolean;
+}
+
+/** the style a picker emits: token NAMES only (`colour: "chart-3"`, never a CSS value) —
+ *  the consumer maps to `var(--…)` when feeding rows (the literal-class law's data twin) */
+export interface RailRowStyle {
+  glyph?: string;
+  colour?: string;
 }
 
 // ── the pure helpers (the invariants, testable without a DOM) ─────────────────────────────────
@@ -131,6 +156,29 @@ export function moveProject(
   return [...rest.slice(0, insertAt), next, ...rest.slice(insertAt)];
 }
 
+/**
+ * Move an asset into `toProjectId` at `toIndex` among that project's assets — `moveProject`'s
+ * mirror, same post-removal index convention, same "unknown id → fresh copy" contract.
+ */
+export function moveAsset(
+  assets: RailAsset[],
+  movedId: string,
+  toProjectId: string,
+  toIndex: number,
+): RailAsset[] {
+  const moved = assets.find((a) => a.id === movedId);
+  if (!moved) return [...assets];
+  const rest = assets.filter((a) => a.id !== movedId);
+  const next: RailAsset = { ...moved, projectId: toProjectId };
+  const members = rest.filter((a) => a.projectId === toProjectId);
+  if (members.length === 0) return [...rest, next];
+  const at = Math.max(0, Math.min(toIndex, members.length));
+  const anchor = at < members.length ? members[at] : members[members.length - 1];
+  const anchorAt = anchor ? rest.indexOf(anchor) : rest.length;
+  const insertAt = at < members.length ? anchorAt : anchorAt + 1;
+  return [...rest.slice(0, insertAt), next, ...rest.slice(insertAt)];
+}
+
 // ── capabilities · glyphs · labels ────────────────────────────────────────────────────────────
 
 export interface RailTreeCapabilities {
@@ -140,6 +188,12 @@ export interface RailTreeCapabilities {
   colour?: boolean;
   /** per-row glyphs (spike, numu1). Off → no glyph column at all. */
   icons?: boolean;
+  /**
+   * The asset level (decision 7). Off → the `assets` prop is ignored entirely — no rows, no drop
+   * targets. Asset DRAG rides THIS capability, not `reorder`: moving an asset between projects
+   * is a filing decision, not a sort, and a consumer without sortable lists still files.
+   */
+  assets?: boolean;
 }
 
 export interface RailGlyphs {
@@ -147,6 +201,7 @@ export interface RailGlyphs {
   unfolded: string;
   channel: string;
   project: string;
+  asset: string;
   drag: string;
   rename: string;
   pin: string;
@@ -156,6 +211,8 @@ export interface RailGlyphs {
   remove: string;
   add: string;
   active: string;
+  duplicate: string;
+  style: string;
 }
 
 /** Documented defaults. Every one is a ligature that must be in the consumer's census. */
@@ -164,6 +221,7 @@ export const DEFAULT_RAIL_GLYPHS: RailGlyphs = {
   unfolded: "expand_more",
   channel: "tag",
   project: "description",
+  asset: "draft",
   drag: "drag_indicator",
   rename: "edit",
   pin: "push_pin",
@@ -173,6 +231,8 @@ export const DEFAULT_RAIL_GLYPHS: RailGlyphs = {
   remove: "delete",
   add: "add",
   active: "circle",
+  duplicate: "content_copy",
+  style: "palette",
 };
 
 export interface RailTreeLabels {
@@ -184,6 +244,8 @@ export interface RailTreeLabels {
   hide: (name: string) => string;
   restore: (name: string) => string;
   remove: (name: string) => string;
+  duplicate: (name: string) => string;
+  style: (name: string) => string;
   fold: (name: string) => string;
   unfold: (name: string) => string;
   unfiled: string;
@@ -202,6 +264,8 @@ export const DEFAULT_RAIL_TREE_LABELS: RailTreeLabels = {
   hide: (n) => `Hide ${n}`,
   restore: (n) => `Restore ${n}`,
   remove: (n) => `Delete ${n}`,
+  duplicate: (n) => `Duplicate ${n}`,
+  style: (n) => `Style ${n}`,
   fold: (n) => `Collapse ${n}`,
   unfold: (n) => `Expand ${n}`,
   unfiled: "Unfiled",
@@ -230,15 +294,32 @@ export interface RailTreeHandlers {
   /** only ever fires when the `reorder` capability is on; `next` is the reordered list */
   reorderChannels?: (next: RailChannel[]) => void;
   reorderProjects?: (next: RailProject[]) => void;
+  /** a project duplicate is DEEP by contract (its assets follow) — the consumer owns the copy */
+  duplicateProject?: (id: string) => void;
+  // ── the asset level (fires only under the `assets` capability) ──
+  selectAsset?: (id: string) => void;
+  renameAsset?: (id: string, name: string) => void;
+  setAssetHidden?: (id: string, hidden: boolean) => void;
+  deleteAsset?: (id: string) => void;
+  duplicateAsset?: (id: string) => void;
+  /** an asset was dragged into another project; `next` is the moved list (`moveAsset` applied) */
+  moveAssets?: (next: RailAsset[]) => void;
+  // ── the style door (the pickers, decision 3) — null clears back to defaults ──
+  setChannelStyle?: (id: string, style: RailRowStyle | null) => void;
+  setProjectStyle?: (id: string, style: RailRowStyle | null) => void;
 }
 
 export interface RailTreeProps {
   channels: RailChannel[];
   projects: RailProject[];
+  /** ignored entirely unless the `assets` capability is declared */
+  assets?: RailAsset[];
   activeProjectId?: string | null;
   capabilities?: RailTreeCapabilities;
   labels?: Partial<RailTreeLabels>;
   glyphs?: Partial<RailGlyphs>;
+  /** the style door's glyph choices — forwarded to RailStylePopover (its default list documented there) */
+  styleGlyphs?: string[];
   on?: RailTreeHandlers;
 }
 
@@ -247,26 +328,38 @@ export interface RailTreeProps {
 type DragState =
   | { kind: "channel"; id: string }
   | { kind: "project"; id: string }
+  | { kind: "asset"; id: string }
   | null;
 
 export function RailTree({
   channels,
   projects,
+  assets = [],
   activeProjectId = null,
   capabilities = {},
   labels,
   glyphs,
+  styleGlyphs,
   on = {},
 }: RailTreeProps) {
   const l = { ...DEFAULT_RAIL_TREE_LABELS, ...labels };
   const g = { ...DEFAULT_RAIL_GLYPHS, ...glyphs };
-  const { reorder = false, colour = false, icons = true } = capabilities;
+  const { reorder = false, colour = false, icons = true, assets: assetsOn = false } = capabilities;
 
   /** folded channels, by id — id-keyed so it survives any re-render or list reshuffle */
   const [folded, setFolded] = useState<ReadonlySet<string>>(() => new Set());
   const [showHidden, setShowHidden] = useState(false);
-  const [editing, setEditing] = useState<{ kind: "channel" | "project"; id: string } | null>(null);
+  const [editing, setEditing] = useState<{ kind: "channel" | "project" | "asset"; id: string } | null>(null);
   const drag = useRef<DragState>(null);
+
+  // the style door: which row's picker is open, anchored to the palette button that opened it.
+  // ONE picker for the whole tree — a popover per row would be markup for nothing.
+  const [styling, setStyling] = useState<{
+    kind: "channel" | "project";
+    id: string;
+    anchor: HTMLElement;
+  } | null>(null);
+  const styleAnchorRef = { current: styling?.anchor ?? null };
 
   const unfold = (id: string) =>
     setFolded((f) => {
@@ -295,13 +388,21 @@ export function RailTree({
   const membersOf = (channelId: string | null) =>
     sortPinnedFirst(projects.filter((p) => p.channelId === channelId && !p.hidden));
 
+  const assetsOf = (projectId: string) =>
+    assetsOn ? assets.filter((a) => a.projectId === projectId && !a.hidden) : [];
+
   const hiddenChannels = channels.filter((c) => c.hidden);
   const hiddenProjects = projects.filter((p) => p.hidden);
-  const hiddenTotal = hiddenChannels.length + hiddenProjects.length;
+  const hiddenAssets = assetsOn ? assets.filter((a) => a.hidden) : [];
+  const hiddenTotal = hiddenChannels.length + hiddenProjects.length + hiddenAssets.length;
 
-  // ── drag wiring. Emitted ONLY when `reorder` is on — no handle, no attribute, no listener. ──
+  // ── drag wiring. Channel/project drags are REORDERS (the `reorder` capability); an asset drag
+  //    is a MOVE and rides `assets` — a consumer without sortable lists still files. ──
+  const dragOn = (kind: NonNullable<DragState>["kind"]) =>
+    kind === "asset" ? assetsOn && !!on.moveAssets : reorder;
+
   const dragProps = (state: NonNullable<DragState>) =>
-    reorder
+    dragOn(state.kind)
       ? {
           draggable: true,
           onDragStart: (e: ReactDragEvent) => {
@@ -352,14 +453,27 @@ export function RailTree({
       drag.current = null;
     };
 
+  const onAssetDrop =
+    (toProjectId: string, overAssetId: string | null) => (e: ReactDragEvent) => {
+      const d = drag.current;
+      if (d?.kind !== "asset" || !dragOn("asset")) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const list = assets.filter((a) => a.projectId === toProjectId && a.id !== d.id);
+      const pos = overAssetId ? list.findIndex((a) => a.id === overAssetId) : -1;
+      const at = pos < 0 ? list.length : dropBefore(e) ? pos : pos + 1;
+      on.moveAssets?.(moveAsset(assets, d.id, toProjectId, at));
+      drag.current = null;
+    };
+
   const allowDrop = (e: ReactDragEvent) => {
-    if (reorder && drag.current) e.preventDefault();
+    if (drag.current && dragOn(drag.current.kind)) e.preventDefault();
   };
 
   // ── rows ────────────────────────────────────────────────────────────────────────────────────
 
   const nameCell = (
-    kind: "channel" | "project",
+    kind: "channel" | "project" | "asset",
     id: string,
     name: string,
     className: string,
@@ -391,6 +505,68 @@ export function RailTree({
       <span className={className}>{name}</span>
     );
 
+  const assetRow = (a: RailAsset) => (
+    <div
+      key={a.id}
+      {...dragProps({ kind: "asset", id: a.id })}
+      onDragOver={allowDrop}
+      onDrop={onAssetDrop(a.projectId, a.id)}
+      className={`group flex h-[var(--row-h)] w-full items-center gap-1.5 rounded-md pl-8 pr-1.5 text-left hover:bg-surface-2 ${
+        a.hidden ? "opacity-55" : ""
+      }`}
+    >
+      {icons && <Symbol name={a.icon ?? g.asset} size="1rem" className="shrink-0 text-mute" />}
+      <button
+        type="button"
+        onClick={() => on.selectAsset?.(a.id)}
+        className="min-w-0 flex-1 cursor-pointer truncate text-left text-body-sm text-dim hover:text-ink"
+      >
+        {nameCell("asset", a.id, a.name, "block truncate", (v) => on.renameAsset?.(a.id, v))}
+      </button>
+      <span className="flex shrink-0 items-center opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+        {a.hidden ? (
+          <>
+            <RowAction
+              glyph={g.restore}
+              title={l.restore(a.name)}
+              onClick={() => on.setAssetHidden?.(a.id, false)}
+            />
+            <RowAction
+              glyph={g.remove}
+              title={l.remove(a.name)}
+              onClick={() => on.deleteAsset?.(a.id)}
+            />
+          </>
+        ) : (
+          <>
+            <RowAction
+              glyph={g.rename}
+              title={l.rename(a.name)}
+              onClick={() => setEditing({ kind: "asset", id: a.id })}
+            />
+            {on.duplicateAsset && (
+              <RowAction
+                glyph={g.duplicate}
+                title={l.duplicate(a.name)}
+                onClick={() => on.duplicateAsset?.(a.id)}
+              />
+            )}
+            <RowAction
+              glyph={g.hide}
+              title={l.hide(a.name)}
+              onClick={() => on.setAssetHidden?.(a.id, true)}
+            />
+            <RowAction
+              glyph={g.remove}
+              title={l.remove(a.name)}
+              onClick={() => on.deleteAsset?.(a.id)}
+            />
+          </>
+        )}
+      </span>
+    </div>
+  );
+
   const projectRow = (p: RailProject, inChannel: string | null) => {
     const active = p.id === activeProjectId;
     const acts: ReactNode = p.hidden ? (
@@ -415,6 +591,20 @@ export function RailTree({
           title={l.rename(p.name)}
           onClick={() => setEditing({ kind: "project", id: p.id })}
         />
+        {on.duplicateProject && (
+          <RowAction
+            glyph={g.duplicate}
+            title={l.duplicate(p.name)}
+            onClick={() => on.duplicateProject?.(p.id)}
+          />
+        )}
+        {on.setProjectStyle && (
+          <RowAction
+            glyph={g.style}
+            title={l.style(p.name)}
+            onClick={(el) => setStyling({ kind: "project", id: p.id, anchor: el })}
+          />
+        )}
         <RowAction
           glyph={p.pinned ? g.unpin : g.pin}
           title={p.pinned ? l.unpin(p.name) : l.pin(p.name)}
@@ -433,48 +623,57 @@ export function RailTree({
       </>
     );
 
+    const mine = p.hidden ? [] : assetsOf(p.id);
+
     return (
-      <div
-        key={p.id}
-        {...dragProps({ kind: "project", id: p.id })}
-        onDragOver={allowDrop}
-        onDrop={onProjectDrop(inChannel, p.id)}
-        // `group` so the actions can be hover-only — they cost nothing at rest
-        className={`group flex h-[var(--row-h)] w-full items-center gap-1.5 rounded-md pl-[1.125rem] pr-1.5 text-left hover:bg-surface-2 ${
-          active ? "bg-signal-tint" : ""
-        } ${p.hidden ? "opacity-55" : ""}`}
-      >
-        {reorder && (
-          <Symbol name={g.drag} size="1rem" className="shrink-0 cursor-grab text-mute" />
-        )}
-        {colour && p.colour && (
-          <span
-            aria-hidden
-            className="h-4 w-0.5 shrink-0 rounded-full"
-            style={{ background: p.colour }}
-          />
-        )}
-        {icons && (
-          <Symbol name={p.icon ?? g.project} size="1.125rem" className="shrink-0 text-dim" />
-        )}
-        <button
-          type="button"
-          onClick={() => on.selectProject?.(p.id)}
-          aria-current={active ? "true" : undefined}
-          className="min-w-0 flex-1 cursor-pointer truncate text-left text-body-md text-ink"
+      <div key={p.id}>
+        <div
+          {...dragProps({ kind: "project", id: p.id })}
+          onDragOver={allowDrop}
+          onDrop={(e) => {
+            // one surface, two drop meanings: a PROJECT lands as a reorder into this row's
+            // channel; an ASSET lands INTO this project. Each handler guards on its drag kind.
+            onProjectDrop(inChannel, p.id)(e);
+            onAssetDrop(p.id, null)(e);
+          }}
+          // `group` so the actions can be hover-only — they cost nothing at rest
+          className={`group flex h-[var(--row-h)] w-full items-center gap-1.5 rounded-md pl-4 pr-1.5 text-left hover:bg-surface-2 ${
+            active ? "bg-signal-tint" : ""
+          } ${p.hidden ? "opacity-55" : ""}`}
         >
-          {nameCell(
-            "project",
-            p.id,
-            p.name,
-            "block truncate",
-            (v) => on.renameProject?.(p.id, v),
+          {reorder && (
+            <Symbol name={g.drag} size="1rem" className="shrink-0 cursor-grab text-mute" />
           )}
-        </button>
-        {active && <Symbol name={g.active} size="0.625rem" className="shrink-0 text-signal" />}
-        <span className="flex shrink-0 items-center opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-          {acts}
-        </span>
+          {colour && p.colour && (
+            <span
+              aria-hidden
+              className="h-4 w-0.5 shrink-0 rounded-full"
+              style={{ background: p.colour }}
+            />
+          )}
+          {icons && (
+            <Symbol name={p.icon ?? g.project} size="1.125rem" className="shrink-0 text-dim" />
+          )}
+          <button
+            type="button"
+            onClick={() => on.selectProject?.(p.id)}
+            aria-current={active ? "true" : undefined}
+            className="min-w-0 flex-1 cursor-pointer truncate text-left text-body-md text-ink"
+          >
+            {nameCell(
+              "project",
+              p.id,
+              p.name,
+              "block truncate",
+              (v) => on.renameProject?.(p.id, v),
+            )}
+          </button>
+          {active && <Symbol name={g.active} size="0.625rem" className="shrink-0 text-signal" />}
+          <span className="flex shrink-0 items-center opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+            {acts}
+          </span>
+        </div>
+        {mine.map(assetRow)}
       </div>
     );
   };
@@ -503,6 +702,13 @@ export function RailTree({
           >
             <Symbol name={isFolded ? g.folded : g.unfolded} size="1.125rem" />
           </button>
+          {colour && c.colour && (
+            <span
+              aria-hidden
+              className="h-4 w-0.5 shrink-0 rounded-full"
+              style={{ background: c.colour }}
+            />
+          )}
           {icons && (
             <Symbol name={c.icon ?? g.channel} size="1.125rem" className="shrink-0 text-dim" />
           )}
@@ -526,6 +732,13 @@ export function RailTree({
               title={l.rename(c.name)}
               onClick={() => setEditing({ kind: "channel", id: c.id })}
             />
+            {on.setChannelStyle && (
+              <RowAction
+                glyph={g.style}
+                title={l.style(c.name)}
+                onClick={(el) => setStyling({ kind: "channel", id: c.id, anchor: el })}
+              />
+            )}
             <RowAction
               glyph={g.hide}
               title={l.hide(c.name)}
@@ -542,7 +755,7 @@ export function RailTree({
           (mine.length ? (
             mine.map((p) => projectRow(p, c.id))
           ) : (
-            <p className="pl-[1.125rem] pr-1.5 text-label-sm text-mute">{l.noProjects}</p>
+            <p className="pl-4 pr-1.5 text-label-sm text-mute">{l.noProjects}</p>
           ))}
       </div>
     );
@@ -604,6 +817,7 @@ export function RailTree({
               </div>
             ))}
             {hiddenProjects.map((p) => projectRow(p, p.channelId))}
+            {hiddenAssets.map(assetRow)}
           </div>
         ) : (
           <button
@@ -614,6 +828,21 @@ export function RailTree({
             {l.hiddenCount(hiddenTotal)}
           </button>
         ))}
+
+      {/* ONE style door for the whole tree, anchored to whichever palette button opened it.
+          A pick MERGES (the popover hands a partial); reset hands null — the consumer owns both. */}
+      <RailStylePopover
+        open={styling !== null}
+        onClose={() => setStyling(null)}
+        anchorRef={styleAnchorRef}
+        glyphs={styleGlyphs}
+        onPick={(style) => {
+          if (!styling) return;
+          if (styling.kind === "channel") on.setChannelStyle?.(styling.id, style);
+          else on.setProjectStyle?.(styling.id, style);
+          if (style === null) setStyling(null); // reset closes; picks stay open for a second axis
+        }}
+      />
     </nav>
   );
 }
@@ -641,7 +870,8 @@ function RowAction({
 }: {
   glyph: string;
   title: string;
-  onClick: () => void;
+  /** the clicked element rides along so an action can ANCHOR something to itself (the style door) */
+  onClick: (el: HTMLElement) => void;
 }) {
   return (
     <button
@@ -650,7 +880,7 @@ function RowAction({
       aria-label={title}
       onClick={(e) => {
         e.stopPropagation();
-        onClick();
+        onClick(e.currentTarget);
       }}
       className="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-sm text-dim hover:bg-surface-2 hover:text-ink"
     >

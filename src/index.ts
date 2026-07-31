@@ -35,11 +35,12 @@ export type { ComposerProps, ComposerLabels, ComposerModeIcon } from "./shell/Co
 
 export {
   RailTree,
-  // the pure helpers: invariant 1 and the two reorder moves, usable (and tested) without a DOM
+  // the pure helpers: invariant 1 and the three moves, usable (and tested) without a DOM
   orphanProjects,
   sortPinnedFirst,
   reorderChannels,
   moveProject,
+  moveAsset,
   DEFAULT_RAIL_TREE_LABELS,
   DEFAULT_RAIL_GLYPHS,
 } from "./shell/RailTree";
@@ -47,11 +48,19 @@ export type {
   RailTreeProps,
   RailChannel,
   RailProject,
+  RailAsset,
+  RailRowStyle,
   RailTreeCapabilities,
   RailTreeHandlers,
   RailTreeLabels,
   RailGlyphs,
 } from "./shell/RailTree";
+export {
+  RailStylePopover,
+  DEFAULT_RAIL_STYLE_LABELS,
+  DEFAULT_STYLE_GLYPHS,
+} from "./shell/RailStylePopover";
+export type { RailStylePopoverProps, RailStylePopoverLabels } from "./shell/RailStylePopover";
 
 export { EmptyRegion } from "./shell/EmptyRegion";
 

@@ -52,6 +52,11 @@ edit
 tag
 visibility
 visibility_off
+# the asset level + the style door (2026-07-31, the data rail): the asset default mark, the
+# palette that opens RailStylePopover, and content_copy (duplicate — donor census has it):
+draft
+palette
+content_copy
 
 # ── used by thread/CodeBlock (the Copy affordance) — BOTH in the donor census already, and both
 #    repeated here because this census lists what THIS repo's components render, not what some

@@ -200,3 +200,110 @@ describe("no app nouns reach the platform tier", () => {
     await m.unmount();
   });
 });
+
+// ── the asset level (the data rail round, 2026-07-31) ─────────────────────────────────────────
+
+import { moveAsset, type RailAsset } from "../RailTree";
+
+const assets: RailAsset[] = [
+  { id: "a1", name: "revenue.sql", projectId: "p1" },
+  { id: "a2", name: "orders.csv", projectId: "p1" },
+  { id: "a3", name: "notes.sql", projectId: "p2" },
+];
+
+describe("moveAsset — the filing move (moveProject's mirror)", () => {
+  it("moves across projects at the asked index, against the post-removal list", () => {
+    const next = moveAsset(assets, "a1", "p2", 0);
+    expect(next.filter((a) => a.projectId === "p2").map((a) => a.id)).toEqual(["a1", "a3"]);
+    expect(next).toHaveLength(3);
+  });
+
+  it("clamps past-the-end, tolerates unknown ids, never mutates the input", () => {
+    const input = assets.map((a) => ({ ...a }));
+    const past = moveAsset(input, "a3", "p1", 99);
+    expect(past.filter((a) => a.projectId === "p1").map((a) => a.id)).toEqual(["a1", "a2", "a3"]);
+    expect(moveAsset(input, "ghost", "p1", 0)).toHaveLength(3);
+    expect(input).toEqual(assets);
+  });
+});
+
+describe("the assets capability is DECLARED, not detected", () => {
+  it("renders asset rows under their project when declared", async () => {
+    const m = await mount(
+      <RailTree
+        channels={channels}
+        projects={projects}
+        assets={assets}
+        capabilities={{ assets: true }}
+      />,
+    );
+    expect(m.text()).toContain("revenue.sql");
+    expect(m.text()).toContain("orders.csv");
+    await m.unmount();
+  });
+
+  it("emits NOTHING for assets when the capability is off — even with rows supplied", async () => {
+    const m = await mount(<RailTree channels={channels} projects={projects} assets={assets} />);
+    expect(m.text()).not.toContain("revenue.sql");
+    await m.unmount();
+  });
+
+  it("duplicate fires with the id, and only renders when its handler exists", async () => {
+    let dup = "";
+    const m = await mount(
+      <RailTree
+        channels={channels}
+        projects={projects}
+        assets={assets}
+        capabilities={{ assets: true }}
+        on={{ duplicateAsset: (id) => (dup = id) }}
+      />,
+    );
+    await m.click(m.button(L.duplicate("revenue.sql")));
+    expect(dup).toBe("a1");
+    await m.unmount();
+    const bare = await mount(
+      <RailTree channels={channels} projects={projects} assets={assets} capabilities={{ assets: true }} />,
+    );
+    expect(bare.buttons().some((b) => b.getAttribute("aria-label") === L.duplicate("revenue.sql"))).toBe(false);
+    await bare.unmount();
+  });
+
+  it("hidden assets fold into the Hidden section with the rest", async () => {
+    const m = await mount(
+      <RailTree
+        channels={channels}
+        projects={projects}
+        assets={[{ id: "a9", name: "ghost.sql", projectId: "p1", hidden: true }]}
+        capabilities={{ assets: true }}
+      />,
+    );
+    expect(m.text()).not.toContain("ghost.sql");
+    expect(m.text()).toContain(L.hiddenCount(1));
+    await m.unmount();
+  });
+});
+
+describe("the style door", () => {
+  it("opens from the palette action and hands the consumer a token NAME; reset hands null", async () => {
+    const picked: (unknown | null)[] = [];
+    const m = await mount(
+      <RailTree
+        channels={channels}
+        projects={projects}
+        on={{ setProjectStyle: (_id, style) => picked.push(style) }}
+      />,
+    );
+    await m.click(m.button(L.style("datacore")));
+    await m.click(m.button("Colour chart-3"));
+    await m.click(m.button("Reset style"));
+    expect(picked).toEqual([{ colour: "chart-3" }, null]);
+    await m.unmount();
+  });
+
+  it("renders no palette action without a style handler", async () => {
+    const m = await mount(<RailTree channels={channels} projects={projects} />);
+    expect(m.buttons().some((b) => b.getAttribute("aria-label") === L.style("datacore"))).toBe(false);
+    await m.unmount();
+  });
+});
