@@ -55,6 +55,31 @@ gestures and only these two:
 
 Motion is a property of the SYSTEM: if a component needs a fourth gesture, it comes here first.
 
+## The row's economy (2026-08-01)
+
+A list row's first job is its NAME. Secondary actions live behind ONE `more_horiz` overflow menu
+per row (`RailRowMenu`, a single instance for the whole tree); each row keeps at most ONE
+promoted quick action inline — the gesture frequent enough to earn a permanent seat (a channel's
+`add`, a project's `duplicate`) — plus its STATE marks: a pinned row wears an always-visible
+filled pin whose click unpins (state is not chrome; it never hover-fades). The trigger cluster
+hover-fades on desktop and is always visible below `md`, where hover does not exist.
+
+Creation and edit are ONE inline form (`RailStyleForm`, numu1's add-form anatomy): glyph button
+· name input · ✓, the swatch line ALWAYS visible beneath (colour is one click, never a popover
+trip), the glyph grid expanding inline. Create picks identity at birth and hands
+`(name, style)`; the menu's Rename opens the SAME form on a stored row, live-applying style
+picks — name, icon and colour are one session, which is why the separate Style menu item and
+the RailStylePopover it opened were retired. Container creation reads as a SENTENCE: "New
+channel" is a full-width labelled row at the tree's foot, not a corner glyph to decode.
+
+## The glyph-ref seam (2026-08-01)
+
+A consumer-fed icon ref is a string with a fixed grammar: a BARE name is a Material Symbols
+ligature — forever, so stored styles never migrate — and a future icon pack claims a PREFIX
+(`bi:…`, `url:…`) resolved by a consumer-supplied `GlyphRenderer` (Symbol.tsx; default
+`renderMaterialGlyph`). Adding a pack is a resolver + assets in the consumer, zero tier change.
+Tier chrome glyphs (chevrons, triggers) stay direct `<Symbol>`s — no pack answers for them.
+
 ## Hierarchy
 
 Cards do not compete: one shadow token per altitude (`--shadow` resting, `--shadow-popover`

@@ -24,6 +24,8 @@
 // A BRAND MARK is not a Symbol — it stays an <img>, unmodified and never recolored.
 // The glyphs this tier needs are censused in src/shell/symbols.txt, in the donor's format.
 
+import type { ReactNode } from "react";
+
 export function Symbol({
   name,
   filled = false,
@@ -46,3 +48,17 @@ export function Symbol({
     </span>
   );
 }
+
+/**
+ * The glyph-ref seam (2026-08-01, the rail UX round). A consumer-fed icon REF is a string with a
+ * fixed grammar: a BARE name is a Material Symbols ligature — forever, so stored row styles never
+ * need a migration — and a future icon pack claims a PREFIX (`bi:pin-angle`,
+ * `url:/icons/mine/x.svg`) that a consumer-supplied renderer resolves. The tier renders every
+ * consumer-fed ref through ONE renderer prop defaulting to this function; adding a pack is a
+ * resolver + assets in the consumer, zero tier change — the O(1) door. Tier CHROME glyphs
+ * (chevrons, drag handles, the more_horiz trigger) stay direct `<Symbol>`s: they are not
+ * consumer vocabulary and no pack ever answers for them.
+ */
+export type GlyphRenderer = (ref: string, size: string) => ReactNode;
+
+export const renderMaterialGlyph: GlyphRenderer = (ref, size) => <Symbol name={ref} size={size} />;

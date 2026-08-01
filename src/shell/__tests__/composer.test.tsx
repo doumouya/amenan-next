@@ -68,13 +68,74 @@ describe("the one-row resting state", () => {
     await m.unmount();
   });
 
-  it("reserves row 2's height at rest and releases it when the door opens", async () => {
-    const m = await mount(fullComposer());
-    const frame = m.container.querySelector("div.rounded-xl") as HTMLElement;
+  it("reserves the door's exact expansion height at rest — two lines when the strip exists", async () => {
+    // with favorites the shortcut strip exists → the reserve is TWO lines (mb-20)
+    const withStrip = await mount(fullComposer());
+    const frame = withStrip.container.querySelector("div.rounded-xl") as HTMLElement;
+    expect(frame.className).toContain("md:mb-20");
+    await withStrip.click(withStrip.button(L.more));
+    expect(frame.className).not.toContain("md:mb-20");
+    await withStrip.unmount();
 
-    expect(frame.className).toContain("md:mb-10");
+    // without pins/favorites there is no strip → the reserve stays one line (mb-10)
+    const bare = await mount(
+      <Composer
+        placeholder="Ask"
+        onRun={noop}
+        actions={[{ id: "info", icon: "info", title: "Reference", onClick: () => {} }]}
+      />,
+    );
+    const bareFrame = bare.container.querySelector("div.rounded-xl") as HTMLElement;
+    expect(bareFrame.className).toContain("md:mb-10");
+    expect(bareFrame.className).not.toContain("md:mb-20");
+    await bare.unmount();
+  });
+
+  it("pins lead the shortcut strip; the divider exists only between pins and favorites", async () => {
+    const jumps: string[] = [];
+    const m = await mount(
+      <Composer
+        placeholder="Ask"
+        onRun={noop}
+        pins={[{ id: "c1", label: "Quarterly", title: "Quarterly", onClick: () => jumps.push("c1") }]}
+        favorites={[{ id: "fav", icon: "star", title: "Pinned app", onClick: () => {} }]}
+      />,
+    );
     await m.click(m.button(L.more));
-    expect(frame.className).not.toContain("md:mb-10");
+    // a labelled ActionButton IS the chip shape; clicking it jumps
+    await m.click(m.button("Quarterly"));
+    expect(jumps).toEqual(["c1"]);
+    // pins and favorites never read as one undifferentiated bar
+    expect(m.container.querySelector("span.bg-rule")).not.toBeNull();
+    await m.unmount();
+
+    const pinsOnly = await mount(
+      <Composer
+        placeholder="Ask"
+        onRun={noop}
+        pins={[{ id: "c1", label: "Quarterly", title: "Quarterly", onClick: () => {} }]}
+      />,
+    );
+    expect(pinsOnly.container.querySelector("span.bg-rule")).toBeNull();
+    await pinsOnly.unmount();
+  });
+
+  it("pins alone open the door and put the strip in its own scroller inside it", async () => {
+    const m = await mount(
+      <Composer
+        placeholder="Ask"
+        onRun={noop}
+        pins={[{ id: "c1", label: "Quarterly", title: "Quarterly", onClick: () => {} }]}
+      />,
+    );
+    // pins are strip citizens, so they alone justify the door…
+    const door = m.button(L.more);
+    expect(door).toBeTruthy();
+    // …and the strip scrolls HORIZONTALLY inside the overflow-hidden door (an inner scroller —
+    // the door's own overflow is the collapse mechanism and cannot double as the strip's)
+    const chip = m.button("Quarterly");
+    expect(chip.closest("div.overflow-x-auto")).not.toBeNull();
+    expect(chip.closest("div.overflow-x-auto")!.parentElement!.className).toContain("overflow-hidden");
     await m.unmount();
   });
 

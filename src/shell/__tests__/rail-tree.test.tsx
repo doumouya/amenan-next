@@ -52,6 +52,8 @@ describe("invariant 1 — deleting a channel ORPHANS its projects", () => {
         on={{ deleteChannel: (_id, orphaned) => (handed = orphaned) }}
       />,
     );
+    // delete lives behind the row's overflow menu now (the 2026-08-01 UX round)
+    await m.click(m.button(L.more("engineering")));
     await m.click(m.button(L.remove("engineering")));
     expect(handed).not.toBeNull();
     expect(handed!.filter((p) => p.channelId === null)).toHaveLength(3);
@@ -60,13 +62,13 @@ describe("invariant 1 — deleting a channel ORPHANS its projects", () => {
 });
 
 describe("invariant 2 — creating into a folded channel UNFOLDS it first", () => {
-  it("re-reveals the channel's rows, so the new one is visible when it lands", async () => {
-    let createdIn: string | null | undefined;
+  it("re-reveals the channel's rows, so the create row is born visible", async () => {
+    let created: [string | null, string | undefined] | null = null;
     const m = await mount(
       <RailTree
         channels={channels}
         projects={projects}
-        on={{ createProject: (id) => (createdIn = id) }}
+        on={{ createProject: (id, name) => (created = [id, name]) }}
       />,
     );
 
@@ -78,28 +80,95 @@ describe("invariant 2 — creating into a folded channel UNFOLDS it first", () =
     expect(m.button(L.unfold("engineering")).closest("div")?.textContent).toContain("2");
 
     await m.click(m.button(L.newProjectIn("engineering")));
-    // WITHOUT this unfold the row is created correctly and NOTHING appears to happen
+    // WITHOUT this unfold the create row opens inside a folded block and NOTHING appears to happen
     expect(m.text()).toContain("datacore");
-    expect(createdIn).toBe("c1");
+
+    // Enter on the EMPTY name still creates — the consumer defaults it (instant-create survives)
+    const input = m.container.querySelector<HTMLInputElement>(
+      `input[aria-label="${L.projectName}"]`,
+    )!;
+    await m.key(input, "Enter");
+    expect(created).toEqual(["c1", undefined]);
     await m.unmount();
   });
 
-  it("routes the top + to a CHANNEL and a channel's + to a project in that channel", async () => {
+  it("routes the top control to a CHANNEL and a channel's + to a project in it, names attached", async () => {
     const calls: string[] = [];
     const m = await mount(
       <RailTree
         channels={channels}
         projects={projects}
         on={{
-          createChannel: () => calls.push("channel"),
-          createProject: (id) => calls.push(`project:${id}`),
+          createChannel: (name) => calls.push(`channel:${name}`),
+          createProject: (id, name) => calls.push(`project:${id}:${name}`),
         }}
       />,
     );
+    // both creates go through the INLINE ROW now (the numu1 gesture): open, type, Enter
     await m.click(m.button(L.newChannel));
+    const cIn = m.container.querySelector<HTMLInputElement>(
+      `input[aria-label="${L.channelName}"]`,
+    )!;
+    cIn.value = "gcp";
+    await m.key(cIn, "Enter");
+
     await m.click(m.button(L.newProjectIn("operations")));
-    // one + could never mean both — that was a wrong shape underneath the button, not a bug in it
-    expect(calls).toEqual(["channel", "project:c2"]);
+    const pIn = m.container.querySelector<HTMLInputElement>(
+      `input[aria-label="${L.projectName}"]`,
+    )!;
+    pIn.value = "alpha";
+    await m.key(pIn, "Enter");
+    // one control could never mean both — a wrong shape underneath the button, not a bug in it
+    expect(calls).toEqual(["channel:gcp", "project:c2:alpha"]);
+    await m.unmount();
+  });
+
+  it("an unnamed channel is a cancel; Esc abandons without firing", async () => {
+    const calls: string[] = [];
+    const m = await mount(
+      <RailTree
+        channels={channels}
+        projects={projects}
+        on={{ createChannel: (name) => calls.push(name) }}
+      />,
+    );
+    await m.click(m.button(L.newChannel));
+    const cIn = m.container.querySelector<HTMLInputElement>(
+      `input[aria-label="${L.channelName}"]`,
+    )!;
+    await m.key(cIn, "Enter"); // empty commit — a container needs identity
+    expect(calls).toEqual([]);
+    expect(m.container.querySelector(`input[aria-label="${L.channelName}"]`)).toBeNull();
+
+    await m.click(m.button(L.newChannel));
+    const again = m.container.querySelector<HTMLInputElement>(
+      `input[aria-label="${L.channelName}"]`,
+    )!;
+    again.value = "gcp";
+    await m.key(again, "Escape");
+    expect(calls).toEqual([]);
+    await m.unmount();
+  });
+
+  it("a style picked on the create form rides the create call — the swatches are ONE click", async () => {
+    let got: [string, unknown] | null = null;
+    const m = await mount(
+      <RailTree
+        channels={channels}
+        projects={projects}
+        // setChannelStyle declares the style capability (styleOn); the pick still rides create
+        on={{ createChannel: (name, style) => (got = [name, style]), setChannelStyle: () => {} }}
+      />,
+    );
+    await m.click(m.button(L.newChannel));
+    // no popover trip: the colour line is ALWAYS visible on the form (the numu1 gesture)
+    await m.click(m.button("Colour chart-3"));
+    const cIn = m.container.querySelector<HTMLInputElement>(
+      `input[aria-label="${L.channelName}"]`,
+    )!;
+    cIn.value = "gcp";
+    await m.key(cIn, "Enter");
+    expect(got).toEqual(["gcp", { colour: "chart-3" }]);
     await m.unmount();
   });
 });
@@ -184,11 +253,13 @@ describe("hidden items", () => {
     const some = await mount(
       <RailTree
         channels={channels}
-        projects={[...projects, { id: "p9", name: "old", channelId: "c1", hidden: true }]}
+        projects={[...projects, { id: "p9", name: "archived", channelId: "c1", hidden: true }]}
       />,
     );
     expect(some.text()).toContain(L.hiddenCount(1));
-    expect(some.text()).not.toContain("old"); // folded away until asked for
+    // NOT named "old": Symbol renders ligature WORDS as text, and `create_new_folder` contains
+    // the substring "old" — a name colliding with a glyph word false-positives this assertion
+    expect(some.text()).not.toContain("archived"); // folded away until asked for
     await some.unmount();
   });
 });
@@ -248,7 +319,7 @@ describe("the assets capability is DECLARED, not detected", () => {
     await m.unmount();
   });
 
-  it("duplicate fires with the id, and only renders when its handler exists", async () => {
+  it("duplicate fires with the id from the menu, and only exists when its handler does", async () => {
     let dup = "";
     const m = await mount(
       <RailTree
@@ -259,12 +330,15 @@ describe("the assets capability is DECLARED, not detected", () => {
         on={{ duplicateAsset: (id) => (dup = id) }}
       />,
     );
+    // assets are menu-only: no promoted quick action on the row itself
+    await m.click(m.button(L.more("revenue.sql")));
     await m.click(m.button(L.duplicate("revenue.sql")));
     expect(dup).toBe("a1");
     await m.unmount();
     const bare = await mount(
       <RailTree channels={channels} projects={projects} assets={assets} capabilities={{ assets: true }} />,
     );
+    await bare.click(bare.button(L.more("revenue.sql")));
     expect(bare.buttons().some((b) => b.getAttribute("aria-label") === L.duplicate("revenue.sql"))).toBe(false);
     await bare.unmount();
   });
@@ -284,26 +358,109 @@ describe("the assets capability is DECLARED, not detected", () => {
   });
 });
 
-describe("the style door", () => {
-  it("opens from the palette action and hands the consumer a token NAME; reset hands null", async () => {
+describe("the edit form (Rename = ONE session: name + icon + colour)", () => {
+  it("style picks live-apply as token NAMES, reset hands null, and ✓ commits the rename", async () => {
     const picked: (unknown | null)[] = [];
+    const renames: [string, string][] = [];
     const m = await mount(
       <RailTree
         channels={channels}
         projects={projects}
-        on={{ setProjectStyle: (_id, style) => picked.push(style) }}
+        on={{
+          setProjectStyle: (_id, style) => picked.push(style),
+          renameProject: (id, v) => renames.push([id, v]),
+        }}
       />,
     );
-    await m.click(m.button(L.style("datacore")));
+    await m.click(m.button(L.more("datacore")));
+    await m.click(m.button(L.rename("datacore")));
+    // the form replaced the row; the colour line is immediately there — no second menu trip
     await m.click(m.button("Colour chart-3"));
     await m.click(m.button("Reset style"));
     expect(picked).toEqual([{ colour: "chart-3" }, null]);
+    const input = m.container.querySelector<HTMLInputElement>(
+      `input[aria-label="${L.projectName}"]`,
+    )!;
+    input.value = "datacore v2";
+    await m.click(m.button(L.save)); // the ✓ — numu1's mouse-only commit
+    expect(renames).toEqual([["p1", "datacore v2"]]);
     await m.unmount();
   });
 
-  it("renders no palette action without a style handler", async () => {
+  it("degenerates to a plain NAME form without a style handler — no controls that no-op", async () => {
     const m = await mount(<RailTree channels={channels} projects={projects} />);
-    expect(m.buttons().some((b) => b.getAttribute("aria-label") === L.style("datacore"))).toBe(false);
+    await m.click(m.button(L.more("datacore")));
+    await m.click(m.button(L.rename("datacore")));
+    expect(m.container.querySelector(`input[aria-label="${L.projectName}"]`)).not.toBeNull();
+    expect(m.buttons().some((b) => (b.getAttribute("aria-label") ?? "").startsWith("Colour "))).toBe(false);
+    await m.unmount();
+  });
+});
+
+describe("the pin dot", () => {
+  it("a pinned row WEARS its pin outside the hover fade, and the click unpins", async () => {
+    const toggles: [string, boolean][] = [];
+    const pinned: RailProject[] = [{ id: "p1", name: "datacore", channelId: "c1", pinned: true }];
+    const m = await mount(
+      <RailTree
+        channels={channels}
+        projects={pinned}
+        on={{ togglePin: (id, next) => toggles.push([id, next]) }}
+      />,
+    );
+    const dot = m.button(L.unpin("datacore"));
+    // OUTSIDE the fade cluster: its parent row is the group itself, not the opacity-0 span
+    expect(dot.parentElement?.className).not.toContain("opacity-0");
+    await m.click(dot);
+    expect(toggles).toEqual([["p1", false]]);
+    await m.unmount();
+  });
+});
+
+// ── the overflow menu itself (the 2026-08-01 UX round) ────────────────────────────────────────
+
+describe("the overflow menu", () => {
+  it("a resting row shows ONE trigger + its promoted action; secondary actions only in the menu", async () => {
+    const m = await mount(
+      <RailTree
+        channels={channels}
+        projects={projects}
+        on={{ duplicateProject: () => {}, renameProject: () => {} }}
+      />,
+    );
+    // promoted: a channel's + and a project's duplicate stay inline
+    expect(m.button(L.newProjectIn("engineering"))).toBeTruthy();
+    expect(m.button(L.duplicate("datacore"))).toBeTruthy();
+    // secondary: rename exists ONLY after the menu opens
+    expect(m.buttons().some((b) => b.getAttribute("aria-label") === L.rename("datacore"))).toBe(false);
+    await m.click(m.button(L.more("datacore")));
+    expect(m.button(L.rename("datacore"))).toBeTruthy();
+    await m.unmount();
+  });
+
+  it("pin/unpin reads the LIVE row state", async () => {
+    const toggles: [string, boolean][] = [];
+    const pinned: RailProject[] = [{ id: "p1", name: "datacore", channelId: "c1", pinned: true }];
+    const m = await mount(
+      <RailTree
+        channels={channels}
+        projects={pinned}
+        on={{ togglePin: (id, next) => toggles.push([id, next]) }}
+      />,
+    );
+    await m.click(m.button(L.more("datacore")));
+    await m.click(m.button(L.unpin("datacore")));
+    expect(toggles).toEqual([["p1", false]]);
+    await m.unmount();
+  });
+
+  it("the trigger cluster is hover-faded on desktop but ALWAYS visible below md", async () => {
+    const m = await mount(<RailTree channels={channels} projects={projects} />);
+    const trigger = m.button(L.more("datacore"));
+    const cluster = trigger.parentElement!;
+    // hover has no touch equivalent — max-md:opacity-100 is what keeps the rail usable there
+    expect(cluster.className).toContain("group-hover:opacity-100");
+    expect(cluster.className).toContain("max-md:opacity-100");
     await m.unmount();
   });
 });

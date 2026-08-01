@@ -19,12 +19,13 @@
 // runs something else, and this one is the AI front door on every page.
 //
 // FOUR THINGS THAT LOOK LIKE STYLE AND ARE NOT:
-//  · ONE ROW RESTING, TWO ON DEMAND (Em's 2026-07-31 ruling, superseding the always-two-rows
-//    cut). The resting row carries the mode identity, the field, and at most two controls —
-//    `trailing` plus the more_vert door — so the field keeps the room that motivated two rows
-//    (the original failure was EIGHT controls competing with it, not the row count). The full
-//    control row exists behind the door; `expanded` is component-local view state (the
-//    chart-toggle argument: a reload restores your draft, not which chrome you had open).
+//  · ONE ROW RESTING, THE REST ON DEMAND (Em's 2026-07-31 ruling, superseding the
+//    always-two-rows cut; the 2026-08-01 round put TWO lines behind the door — the tools line
+//    and the shortcut strip of pinned destinations + pinned apps). The resting row carries the
+//    mode identity, the field, and at most two controls — `trailing` plus the more_vert door —
+//    so the field keeps the room that motivated two rows (the original failure was EIGHT
+//    controls competing with it, not the row count). `expanded` is component-local view state
+//    (the chart-toggle argument: a reload restores your draft, not which chrome you had open).
 //  · The DRAWN placeholder (see the spec above). `aria-describedby` carries the hint to assistive
 //    tech, which is stronger semantics than a placeholder anyway.
 //  · The field, the mirrored <pre> and the drawn placeholder carry the SAME padding. They are
@@ -99,10 +100,17 @@ export interface ComposerProps {
   prompt?: string;
   actions?: ComposerAction[];
   /**
-   * The user's pinned apps — rendered at the FAR END of the control row, past a spring, so "what
-   * this composer does" and "what I pinned to it" never read as one undifferentiated bar.
+   * The user's pinned apps — SHORTCUT-STRIP citizens (2026-08-01): they render on the strip
+   * below the tools line, after the pinned destinations, so "what this composer does" and "what
+   * I pinned to it" never read as one undifferentiated bar.
    */
   favorites?: ComposerAction[];
+  /**
+   * Pinned DESTINATIONS — labelled chips (a `label` makes an ActionButton a chip) that jump
+   * somewhere, e.g. a consumer's pinned conversations. They lead the shortcut strip; `favorites`
+   * (pinned apps) follow past a divider. The strip scrolls horizontally when they overflow.
+   */
+  pins?: ComposerAction[];
   /**
    * The leading door, rendered iff present. A single action, not a list, so the type cannot
    * describe a menu: the `+` popover this replaced had three sections whose every item existed one
@@ -137,6 +145,7 @@ export function Composer({
   prompt = "❯",
   actions = [],
   favorites = [],
+  pins = [],
   attach,
   compute,
   highlight,
@@ -153,7 +162,8 @@ export function Composer({
   const [error, setError] = useState<string | null>(null);
   // the more_vert door — view state, component-local on purpose (see the header)
   const [expanded, setExpanded] = useState(false);
-  const hasRow2 = !!attach || actions.length > 0 || favorites.length > 0;
+  const hasStrip = pins.length > 0 || favorites.length > 0;
+  const hasRow2 = !!attach || actions.length > 0 || hasStrip;
 
   const ref = useRef<HTMLTextAreaElement>(null);
   const preRef = useRef<HTMLPreElement>(null);
@@ -297,14 +307,15 @@ export function Composer({
           stay pinned to the resting line instead of floating mid-frame.
 
           RESERVE AND RELEASE (Em's ruling: the typing area must not move when the door opens).
-          At rest the frame reserves row 2's exact height as bottom margin (40px: 36px buttons +
-          the 4px row gap); opening releases it while row 2 grows into it. Both run at --med with
-          the same ease, so the sum is constant on EVERY frame of the animation and the field
-          holds still. ≥md only — on a phone the composer sits on the bottom edge, and a
-          permanent 40px of dead space there costs more than the field's rise. */}
+          At rest the frame reserves the door's exact expansion height as bottom margin — one
+          line (36px buttons + the 4px gap = mb-10) or two when the shortcut strip exists
+          (2 × 40px = mb-20) — and opening releases it while the door grows into it. Both run at
+          --med with the same ease, so the sum is constant on EVERY frame of the animation and
+          the field holds still. ≥md only — on a phone the composer sits on the bottom edge, and
+          permanent dead space there costs more than the field's rise. */}
       <div
         className={`flex flex-col rounded-xl border border-border bg-surface p-3 shadow-[var(--shadow)] transition-[border-color,box-shadow,margin] duration-[var(--med)] ease-[var(--ease)] focus-within:border-accent focus-within:shadow-[var(--focus-ring)] short:p-1.5 ${
-          expanded ? "" : "md:mb-10"
+          expanded ? "" : hasStrip ? "md:mb-20" : "md:mb-10"
         }`}
       >
         {/* ── ROW 1: the mode identity, the field, the trailing seat(s), the door ── */}
@@ -419,41 +430,56 @@ export function Composer({
           )}
         </div>
 
-        {/* ── ROW 2, behind the door — ALWAYS MOUNTED, collapsed to height 0 (the size-change
-            gesture: 0 → auto rides interpolate-size, bridge.css). `inert` while collapsed, or
-            every hidden control would still be a tab stop inside an overflow-hidden box. The
-            row owns its own top gap (mt-1) so a collapsed row contributes exactly nothing. ── */}
+        {/* ── THE DOOR (2026-08-01: two lines behind it) — ALWAYS MOUNTED, collapsed to height 0
+            (the size-change gesture: 0 → auto rides interpolate-size, bridge.css). `inert` while
+            collapsed, or every hidden control would still be a tab stop inside an
+            overflow-hidden box. The door owns its own top gap (mt-1) so a collapsed door
+            contributes exactly nothing. Inside: the TOOLS line (the composer's own verbs), then
+            the SHORTCUT strip (pinned destinations · pinned apps) — verbs and destinations
+            never share a line. ── */}
         {hasRow2 && (
           <div
             inert={!expanded}
-            className={`flex items-center gap-0.5 overflow-hidden transition-[height,margin,opacity] duration-[var(--med)] ease-[var(--ease)] ${
+            className={`flex flex-col overflow-hidden transition-[height,margin,opacity] duration-[var(--med)] ease-[var(--ease)] ${
               expanded ? "mt-1 h-auto opacity-100" : "mt-0 h-0 opacity-0"
             }`}
           >
-            {/* leading, chat-app style. A paperclip rather than a `+`: a `+` promises "more", and
-                there is no more — it opens one door and nothing else. */}
-            {attach && (
-              <button
-                onClick={attach.onClick}
-                title={attach.title}
-                aria-label={attach.title}
-                className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-md text-dim hover:bg-surface-2 hover:text-ink max-md:size-11"
-              >
-                <Symbol name={attach.icon ?? "attach_file"} size="1.375rem" />
-              </button>
+            <div className="flex items-center gap-0.5">
+              {/* leading, chat-app style. A paperclip rather than a `+`: a `+` promises "more",
+                  and there is no more — it opens one door and nothing else. */}
+              {attach && (
+                <button
+                  onClick={attach.onClick}
+                  title={attach.title}
+                  aria-label={attach.title}
+                  className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-md text-dim hover:bg-surface-2 hover:text-ink max-md:size-11"
+                >
+                  <Symbol name={attach.icon ?? "attach_file"} size="1.375rem" />
+                </button>
+              )}
+
+              {/* the declarative action bar — every width; the tools line has the room */}
+              {actions.map((a) => (
+                <ActionButton key={a.id} action={a} />
+              ))}
+            </div>
+
+            {/* the shortcut strip: an INNER scroller — the door is overflow-hidden (it IS the
+                collapse), so the strip must own its horizontal overflow itself. Bars are hidden
+                by the consumer's global scrollbar law, not restated here (the CodeBlock note). */}
+            {hasStrip && (
+              <div className="mt-1 flex items-center gap-0.5 overflow-x-auto">
+                {pins.map((a) => (
+                  <ActionButton key={a.id} action={a} />
+                ))}
+                {pins.length > 0 && favorites.length > 0 && (
+                  <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-rule" />
+                )}
+                {favorites.map((a) => (
+                  <ActionButton key={a.id} action={a} />
+                ))}
+              </div>
             )}
-
-            {/* the declarative action bar — every width; row 2 has the room */}
-            {actions.map((a) => (
-              <ActionButton key={a.id} action={a} />
-            ))}
-
-            <span className="flex-1" />
-
-            {/* past the spring: the user's additions, not the composer's own verbs */}
-            {favorites.map((a) => (
-              <ActionButton key={a.id} action={a} />
-            ))}
           </div>
         )}
       </div>

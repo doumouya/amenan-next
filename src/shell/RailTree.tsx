@@ -46,10 +46,29 @@
 // carries `w-[var(--object-rail-w)]`; here it is `w-full`, because this renders inside
 // `<LeftPanel>`, which already IS that width — binding it twice means one of the two is wrong the
 // day the token moves.
+//
+// THE 2026-08-01 UX ROUND (supersedes the spec's "row actions are hover-only" sentence):
+//  · Secondary actions live behind ONE `more_horiz` overflow menu per row (RailRowMenu) — six
+//    hover icons were ~144px of reserved space against the name, and unreachable on touch. Each
+//    row keeps ONE promoted quick action inline: a channel's `add` (new project), a project's
+//    `duplicate`. Assets are menu-only; hidden-section rows keep their two inline icons
+//    (restore · delete — no crowding to solve there). The trigger cluster is still hover-faded
+//    on desktop but ALWAYS visible below md, where hover does not exist. A PINNED project also
+//    wears an always-visible filled pin (one click unpins) — pinned state is state, not chrome.
+//  · CREATION AND EDIT are ONE inline form (RailStyleForm — numu1's add-form anatomy, Em's
+//    ruling): name + icon + colour in one session, swatches always visible, the glyph grid
+//    inline. Create hands `(name, style)` to the create handlers; the menu's Rename opens the
+//    SAME form on a stored row, live-applying style picks. No consumer window.prompt survives,
+//    and no style popover either — RailStylePopover was superseded and deleted.
+//  · "New channel" is a full-width LABELLED row at the tree's foot (numu1's shape), not a
+//    corner icon: creation of the container reads as a sentence, not a glyph to decode.
+//  · Consumer-fed icon refs render through the glyph-ref seam (`renderGlyph`, Symbol.tsx) —
+//    bare name = Material forever; prefixed refs are future icon packs, resolved app-side.
 
 import { useRef, useState, type DragEvent as ReactDragEvent, type ReactNode } from "react";
-import { RailStylePopover } from "./RailStylePopover";
-import { Symbol } from "./Symbol";
+import { RailRowMenu, type RailRowMenuItem } from "./RailRowMenu";
+import { RailStyleForm } from "./RailStyleForm";
+import { renderMaterialGlyph, Symbol, type GlyphRenderer } from "./Symbol";
 
 // ── the model ────────────────────────────────────────────────────────────────────────────────
 
@@ -213,6 +232,10 @@ export interface RailGlyphs {
   active: string;
   duplicate: string;
   style: string;
+  /** the per-row overflow-menu trigger */
+  more: string;
+  /** the tree header's create-channel control — a folder is born, not a generic `+` */
+  create: string;
 }
 
 /** Documented defaults. Every one is a ligature that must be in the consumer's census. */
@@ -233,6 +256,8 @@ export const DEFAULT_RAIL_GLYPHS: RailGlyphs = {
   active: "circle",
   duplicate: "content_copy",
   style: "palette",
+  more: "more_horiz",
+  create: "create_new_folder",
 };
 
 export interface RailTreeLabels {
@@ -248,6 +273,13 @@ export interface RailTreeLabels {
   style: (name: string) => string;
   fold: (name: string) => string;
   unfold: (name: string) => string;
+  /** the per-row overflow-menu trigger */
+  more: (name: string) => string;
+  /** the inline create rows' input placeholders (they double as the inputs' accessible names) */
+  channelName: string;
+  projectName: string;
+  /** the inline form's ✓ commit */
+  save: string;
   unfiled: string;
   hiddenSection: string;
   hiddenCount: (n: number) => string;
@@ -268,6 +300,10 @@ export const DEFAULT_RAIL_TREE_LABELS: RailTreeLabels = {
   style: (n) => `Style ${n}`,
   fold: (n) => `Collapse ${n}`,
   unfold: (n) => `Expand ${n}`,
+  more: (n) => `Actions for ${n}`,
+  channelName: "Channel name",
+  projectName: "Project name",
+  save: "Save",
   unfiled: "Unfiled",
   hiddenSection: "Hidden",
   hiddenCount: (n) => `${n} hidden`,
@@ -277,9 +313,14 @@ export const DEFAULT_RAIL_TREE_LABELS: RailTreeLabels = {
 
 export interface RailTreeHandlers {
   selectProject?: (id: string) => void;
-  createChannel?: () => void;
-  /** null → create into Unfiled. The channel is already unfolded when this fires (invariant 2). */
-  createProject?: (channelId: string | null) => void;
+  /** fired by the inline create row — `name` is non-empty (an unnamed channel is a cancel) */
+  createChannel?: (name: string, style?: RailRowStyle) => void;
+  /**
+   * null channel → create into Unfiled. The channel is already unfolded when this fires
+   * (invariant 2). `name` is absent when the user committed an empty create row — the consumer
+   * defaults it (the chat-app instant-create gesture survives the inline flow).
+   */
+  createProject?: (channelId: string | null, name?: string, style?: RailRowStyle) => void;
   renameChannel?: (id: string, name: string) => void;
   renameProject?: (id: string, name: string) => void;
   setChannelHidden?: (id: string, hidden: boolean) => void;
@@ -318,8 +359,10 @@ export interface RailTreeProps {
   capabilities?: RailTreeCapabilities;
   labels?: Partial<RailTreeLabels>;
   glyphs?: Partial<RailGlyphs>;
-  /** the style door's glyph choices — forwarded to RailStylePopover (its default list documented there) */
+  /** the style glyph choices — forwarded to the inline form (its default list documented there) */
   styleGlyphs?: string[];
+  /** the glyph-ref seam (Symbol.tsx): resolves consumer-fed icon refs; default = Material only */
+  renderGlyph?: GlyphRenderer;
   on?: RailTreeHandlers;
 }
 
@@ -340,6 +383,7 @@ export function RailTree({
   labels,
   glyphs,
   styleGlyphs,
+  renderGlyph = renderMaterialGlyph,
   on = {},
 }: RailTreeProps) {
   const l = { ...DEFAULT_RAIL_TREE_LABELS, ...labels };
@@ -352,14 +396,20 @@ export function RailTree({
   const [editing, setEditing] = useState<{ kind: "channel" | "project" | "asset"; id: string } | null>(null);
   const drag = useRef<DragState>(null);
 
-  // the style door: which row's picker is open, anchored to the palette button that opened it.
-  // ONE picker for the whole tree — a popover per row would be markup for nothing.
-  const [styling, setStyling] = useState<{
-    kind: "channel" | "project";
+  // the ONE overflow menu (2026-08-01) — a single instance for the whole tree
+  const [menu, setMenu] = useState<{
+    kind: "channel" | "project" | "asset";
     id: string;
     anchor: HTMLElement;
   } | null>(null);
-  const styleAnchorRef = { current: styling?.anchor ?? null };
+  const menuAnchorRef = { current: menu?.anchor ?? null };
+
+  // the inline create form (the numu1 gesture): name + style picked BEFORE the row exists, so
+  // the create handlers receive both and no consumer window.prompt survives
+  const [creating, setCreating] = useState<
+    { kind: "channel" } | { kind: "project"; channelId: string } | null
+  >(null);
+  const [createStyle, setCreateStyle] = useState<RailRowStyle | null>(null);
 
   const unfold = (id: string) =>
     setFolded((f) => {
@@ -377,10 +427,31 @@ export function RailTree({
       return n;
     });
 
-  /** INVARIANT 2 — unfold FIRST, then create. Never the other way round. */
-  const createProject = (channelId: string | null) => {
-    if (channelId) unfold(channelId);
-    on.createProject?.(channelId);
+  /** INVARIANT 2 — unfold FIRST, then open the create row. The row must be born visible. */
+  const openCreate = (next: { kind: "channel" } | { kind: "project"; channelId: string }) => {
+    if (next.kind === "project") unfold(next.channelId);
+    setCreateStyle(null);
+    setCreating(next);
+  };
+
+  const closeCreate = () => {
+    setCreating(null);
+    setCreateStyle(null);
+  };
+
+  const commitCreate = (raw: string) => {
+    const c = creating;
+    if (!c) return;
+    const name = raw.trim();
+    const style = createStyle ?? undefined;
+    closeCreate();
+    if (c.kind === "channel") {
+      // an unnamed channel is a cancel — a container needs identity
+      if (name) on.createChannel?.(name, style);
+    } else {
+      // an empty name still creates; the consumer defaults it (instant-create survives inline)
+      on.createProject?.(c.channelId, name || undefined, style);
+    }
   };
 
   const deleteChannel = (id: string) => on.deleteChannel?.(id, orphanProjects(projects, id));
@@ -505,6 +576,62 @@ export function RailTree({
       <span className={className}>{name}</span>
     );
 
+  /** rows carry colour as the ONE convention's CSS value (`var(--token)`); the form's active
+   *  swatch needs the token NAME back — this is that convention's inverse, nothing more */
+  const tokenOf = (css?: string) => css?.match(/^var\(--([A-Za-z0-9-]+)\)$/)?.[1];
+
+  // ── the inline CREATE form (numu1's add-form): style accumulates locally and rides the
+  //    create call; leaving the form cancels (a stray click must not mint a row) ──────────────
+  const createForm = (kind: "channel" | "project") => (
+    <RailStyleForm
+      placeholder={kind === "channel" ? l.channelName : l.projectName}
+      glyph={createStyle?.glyph ?? (kind === "channel" ? g.channel : g.project)}
+      colourToken={createStyle?.colour}
+      styleTitle={l.style(kind === "channel" ? l.channelName : l.projectName)}
+      glyphs={styleGlyphs}
+      renderGlyph={renderGlyph}
+      indent={kind === "project"}
+      styleOn={kind === "channel" ? !!on.setChannelStyle : !!on.setProjectStyle}
+      labels={{ save: l.save }}
+      onStyle={(s) => setCreateStyle((cur) => (s === null ? null : { ...(cur ?? {}), ...s }))}
+      onCommit={commitCreate}
+      onCancel={closeCreate}
+    />
+  );
+
+  // ── the inline EDIT form — the SAME anatomy on a stored row (Em's ruling: name, icon and
+  //    colour in one session). Style picks live-apply through the style handlers; the name
+  //    commits on Enter/✓/leave (numu1's rename-on-blur). ─────────────────────────────────────
+  const editForm = (
+    kind: "channel" | "project",
+    row: { id: string; name: string; icon?: string; colour?: string },
+    indent: boolean,
+  ) => (
+    <RailStyleForm
+      initialName={row.name}
+      placeholder={kind === "channel" ? l.channelName : l.projectName}
+      glyph={row.icon ?? (kind === "channel" ? g.channel : g.project)}
+      colourToken={tokenOf(row.colour)}
+      styleTitle={l.style(row.name)}
+      glyphs={styleGlyphs}
+      renderGlyph={renderGlyph}
+      indent={indent}
+      commitOnLeave
+      styleOn={kind === "channel" ? !!on.setChannelStyle : !!on.setProjectStyle}
+      labels={{ save: l.save }}
+      onStyle={(s) =>
+        kind === "channel" ? on.setChannelStyle?.(row.id, s) : on.setProjectStyle?.(row.id, s)
+      }
+      onCommit={(raw) => {
+        const v = raw.trim();
+        setEditing(null);
+        if (v && v !== row.name)
+          (kind === "channel" ? on.renameChannel : on.renameProject)?.(row.id, v);
+      }}
+      onCancel={() => setEditing(null)}
+    />
+  );
+
   const assetRow = (a: RailAsset) => (
     <div
       key={a.id}
@@ -515,7 +642,9 @@ export function RailTree({
         a.hidden ? "opacity-55" : ""
       }`}
     >
-      {icons && <Symbol name={a.icon ?? g.asset} size="1rem" className="shrink-0 text-mute" />}
+      {icons && (
+        <span className="flex shrink-0 text-mute">{renderGlyph(a.icon ?? g.asset, "1rem")}</span>
+      )}
       <button
         type="button"
         onClick={() => on.selectAsset?.(a.id)}
@@ -523,7 +652,7 @@ export function RailTree({
       >
         {nameCell("asset", a.id, a.name, "block truncate", (v) => on.renameAsset?.(a.id, v))}
       </button>
-      <span className="flex shrink-0 items-center opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+      <span className="flex shrink-0 items-center opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 max-md:opacity-100">
         {a.hidden ? (
           <>
             <RowAction
@@ -538,30 +667,12 @@ export function RailTree({
             />
           </>
         ) : (
-          <>
-            <RowAction
-              glyph={g.rename}
-              title={l.rename(a.name)}
-              onClick={() => setEditing({ kind: "asset", id: a.id })}
-            />
-            {on.duplicateAsset && (
-              <RowAction
-                glyph={g.duplicate}
-                title={l.duplicate(a.name)}
-                onClick={() => on.duplicateAsset?.(a.id)}
-              />
-            )}
-            <RowAction
-              glyph={g.hide}
-              title={l.hide(a.name)}
-              onClick={() => on.setAssetHidden?.(a.id, true)}
-            />
-            <RowAction
-              glyph={g.remove}
-              title={l.remove(a.name)}
-              onClick={() => on.deleteAsset?.(a.id)}
-            />
-          </>
+          // assets are menu-only: no promoted quick action earned a seat here
+          <RowAction
+            glyph={g.more}
+            title={l.more(a.name)}
+            onClick={(el) => setMenu({ kind: "asset", id: a.id, anchor: el })}
+          />
         )}
       </span>
     </div>
@@ -585,12 +696,8 @@ export function RailTree({
         />
       </>
     ) : (
+      // the promoted quick action (duplicate) + the overflow trigger — everything else is menu
       <>
-        <RowAction
-          glyph={g.rename}
-          title={l.rename(p.name)}
-          onClick={() => setEditing({ kind: "project", id: p.id })}
-        />
         {on.duplicateProject && (
           <RowAction
             glyph={g.duplicate}
@@ -598,32 +705,25 @@ export function RailTree({
             onClick={() => on.duplicateProject?.(p.id)}
           />
         )}
-        {on.setProjectStyle && (
-          <RowAction
-            glyph={g.style}
-            title={l.style(p.name)}
-            onClick={(el) => setStyling({ kind: "project", id: p.id, anchor: el })}
-          />
-        )}
         <RowAction
-          glyph={p.pinned ? g.unpin : g.pin}
-          title={p.pinned ? l.unpin(p.name) : l.pin(p.name)}
-          onClick={() => on.togglePin?.(p.id, !p.pinned)}
-        />
-        <RowAction
-          glyph={g.hide}
-          title={l.hide(p.name)}
-          onClick={() => on.setProjectHidden?.(p.id, true)}
-        />
-        <RowAction
-          glyph={g.remove}
-          title={l.remove(p.name)}
-          onClick={() => on.deleteProject?.(p.id)}
+          glyph={g.more}
+          title={l.more(p.name)}
+          onClick={(el) => setMenu({ kind: "project", id: p.id, anchor: el })}
         />
       </>
     );
 
     const mine = p.hidden ? [] : assetsOf(p.id);
+
+    // the EDIT form takes the whole row (name + icon + colour, one session — Em's ruling)
+    if (!p.hidden && editing?.kind === "project" && editing.id === p.id) {
+      return (
+        <div key={p.id}>
+          {editForm("project", p, true)}
+          {mine.map(assetRow)}
+        </div>
+      );
+    }
 
     return (
       <div key={p.id}>
@@ -652,7 +752,9 @@ export function RailTree({
             />
           )}
           {icons && (
-            <Symbol name={p.icon ?? g.project} size="1.125rem" className="shrink-0 text-dim" />
+            <span className="flex shrink-0 text-dim">
+              {renderGlyph(p.icon ?? g.project, "1.125rem")}
+            </span>
           )}
           <button
             type="button"
@@ -669,7 +771,17 @@ export function RailTree({
             )}
           </button>
           {active && <Symbol name={g.active} size="0.625rem" className="shrink-0 text-signal" />}
-          <span className="flex shrink-0 items-center opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+          {/* a pinned row WEARS its pin, outside the fade — state, not chrome (numu1's dot);
+              the click is the one-step unpin */}
+          {p.pinned && !p.hidden && (
+            <RowAction
+              glyph={g.pin}
+              filled
+              title={l.unpin(p.name)}
+              onClick={() => on.togglePin?.(p.id, false)}
+            />
+          )}
+          <span className="flex shrink-0 items-center opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 max-md:opacity-100">
             {acts}
           </span>
         </div>
@@ -681,8 +793,12 @@ export function RailTree({
   const channelBlock = (c: RailChannel) => {
     const mine = membersOf(c.id);
     const isFolded = folded.has(c.id);
+    const isEditing = editing?.kind === "channel" && editing.id === c.id;
     return (
       <div key={c.id} onDragOver={allowDrop} onDrop={onProjectDrop(c.id, null)}>
+        {isEditing ? (
+          editForm("channel", c, false)
+        ) : (
         <div
           {...dragProps({ kind: "channel", id: c.id })}
           onDragOver={allowDrop}
@@ -710,7 +826,9 @@ export function RailTree({
             />
           )}
           {icons && (
-            <Symbol name={c.icon ?? g.channel} size="1.125rem" className="shrink-0 text-dim" />
+            <span className="flex shrink-0 text-dim">
+              {renderGlyph(c.icon ?? g.channel, "1.125rem")}
+            </span>
           )}
           {nameCell(
             "channel",
@@ -721,36 +839,21 @@ export function RailTree({
           )}
           {/* the count stays visible while folded — it is what keeps telling you what is inside */}
           <span className="shrink-0 text-label-sm text-mute">{mine.length}</span>
-          <span className="flex shrink-0 items-center opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+          <span className="flex shrink-0 items-center opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 max-md:opacity-100">
             <RowAction
               glyph={g.add}
               title={l.newProjectIn(c.name)}
-              onClick={() => createProject(c.id)}
+              onClick={() => openCreate({ kind: "project", channelId: c.id })}
             />
             <RowAction
-              glyph={g.rename}
-              title={l.rename(c.name)}
-              onClick={() => setEditing({ kind: "channel", id: c.id })}
-            />
-            {on.setChannelStyle && (
-              <RowAction
-                glyph={g.style}
-                title={l.style(c.name)}
-                onClick={(el) => setStyling({ kind: "channel", id: c.id, anchor: el })}
-              />
-            )}
-            <RowAction
-              glyph={g.hide}
-              title={l.hide(c.name)}
-              onClick={() => on.setChannelHidden?.(c.id, true)}
-            />
-            <RowAction
-              glyph={g.remove}
-              title={l.remove(c.name)}
-              onClick={() => deleteChannel(c.id)}
+              glyph={g.more}
+              title={l.more(c.name)}
+              onClick={(el) => setMenu({ kind: "channel", id: c.id, anchor: el })}
             />
           </span>
         </div>
+        )}
+        {creating?.kind === "project" && creating.channelId === c.id && createForm("project")}
         {!isFolded &&
           (mine.length ? (
             mine.map((p) => projectRow(p, c.id))
@@ -763,14 +866,90 @@ export function RailTree({
 
   const unfiled = membersOf(null);
 
+  // ── the overflow menu's items, built from the LIVE row so pin/unpin reads current state.
+  //    Conditional items follow the declared-not-detected law exactly as the inline icons did:
+  //    no handler → no item, never a disabled one. ─────────────────────────────────────────────
+  const menuItems = ((): RailRowMenuItem[] => {
+    if (!menu) return [];
+    if (menu.kind === "channel") {
+      const c = channels.find((x) => x.id === menu.id);
+      if (!c) return [];
+      return [
+        {
+          // Rename opens the FULL edit form — name, icon and colour in one session (the style
+          // menu item folded into it; fewer trips was the whole point of the ruling)
+          glyph: g.rename,
+          label: l.rename(c.name),
+          onClick: () => setEditing({ kind: "channel", id: c.id }),
+        },
+        {
+          glyph: g.hide,
+          label: l.hide(c.name),
+          onClick: () => on.setChannelHidden?.(c.id, true),
+        },
+        { glyph: g.remove, label: l.remove(c.name), onClick: () => deleteChannel(c.id) },
+      ];
+    }
+    if (menu.kind === "project") {
+      const p = projects.find((x) => x.id === menu.id);
+      if (!p) return [];
+      return [
+        {
+          // the full edit form here too — see the channel item's note
+          glyph: g.rename,
+          label: l.rename(p.name),
+          onClick: () => setEditing({ kind: "project", id: p.id }),
+        },
+        {
+          glyph: p.pinned ? g.unpin : g.pin,
+          label: p.pinned ? l.unpin(p.name) : l.pin(p.name),
+          onClick: () => on.togglePin?.(p.id, !p.pinned),
+        },
+        {
+          glyph: g.hide,
+          label: l.hide(p.name),
+          onClick: () => on.setProjectHidden?.(p.id, true),
+        },
+        { glyph: g.remove, label: l.remove(p.name), onClick: () => on.deleteProject?.(p.id) },
+      ];
+    }
+    const a = assets.find((x) => x.id === menu.id);
+    if (!a) return [];
+    return [
+      {
+        glyph: g.rename,
+        label: l.rename(a.name),
+        onClick: () => setEditing({ kind: "asset", id: a.id }),
+      },
+      ...(on.duplicateAsset
+        ? [
+            {
+              glyph: g.duplicate,
+              label: l.duplicate(a.name),
+              onClick: () => on.duplicateAsset?.(a.id),
+            },
+          ]
+        : []),
+      {
+        glyph: g.hide,
+        label: l.hide(a.name),
+        onClick: () => on.setAssetHidden?.(a.id, true),
+      },
+      { glyph: g.remove, label: l.remove(a.name), onClick: () => on.deleteAsset?.(a.id) },
+    ];
+  })();
+
+  // the menu's accessible name — the same label as the trigger that opened it
+  const menuName = (() => {
+    if (!menu) return "";
+    const src: { id: string; name: string }[] =
+      menu.kind === "channel" ? channels : menu.kind === "project" ? projects : assets;
+    const row = src.find((x) => x.id === menu.id);
+    return row ? l.more(row.name) : "";
+  })();
+
   return (
     <nav aria-label={l.tree} className="flex w-full flex-col gap-0.5 py-2">
-      {/* the top + makes a CHANNEL — one meaning, no menu. A project is created from the channel
-          that will own it, which is the only place the answer is unambiguous. */}
-      <div className="flex items-center justify-end px-1.5 pb-1">
-        <RowAction glyph={g.add} title={l.newChannel} onClick={() => on.createChannel?.()} />
-      </div>
-
       {channels.filter((c) => !c.hidden).map(channelBlock)}
 
       {unfiled.length > 0 && (
@@ -778,6 +957,27 @@ export function RailTree({
           <SectionHead label={l.unfiled} count={unfiled.length} />
           {unfiled.map((p) => projectRow(p, null))}
         </div>
+      )}
+
+      {/* "New channel" is a full-width LABELLED row at the tree's foot (numu1's shape): the
+          container's creation reads as a sentence, not a corner glyph to decode. It makes a
+          CHANNEL — one meaning, no menu; a project is created from the channel that will own
+          it, which is the only place the answer is unambiguous. Both open the inline form. */}
+      {creating?.kind === "channel" ? (
+        createForm("channel")
+      ) : (
+        <button
+          type="button"
+          title={l.newChannel}
+          aria-label={l.newChannel}
+          onClick={() => openCreate({ kind: "channel" })}
+          // NO w-full: the nav is a flex COLUMN, so this stretches to full width by itself —
+          // and only without an explicit width can mx-* inset it (w-full + mx overflows right)
+          className="mx-1.5 mt-1 flex h-[var(--ctl-h)] cursor-pointer items-center gap-1.5 rounded-md border border-border px-2 text-label-md text-dim hover:bg-surface-2 hover:text-ink"
+        >
+          <Symbol name={g.create} size="1.125rem" />
+          <span>{l.newChannel}</span>
+        </button>
       )}
 
       {/* Hidden items get no permanent chrome: this line IS the entry point and it only exists
@@ -799,10 +999,12 @@ export function RailTree({
                 className="group flex h-[var(--row-h)] w-full items-center gap-1.5 rounded-md px-1.5 opacity-55 hover:bg-surface-2"
               >
                 {icons && (
-                  <Symbol name={c.icon ?? g.channel} size="1.125rem" className="shrink-0 text-dim" />
+                  <span className="flex shrink-0 text-dim">
+                    {renderGlyph(c.icon ?? g.channel, "1.125rem")}
+                  </span>
                 )}
                 <span className="min-w-0 flex-1 truncate text-label-lg text-ink">{c.name}</span>
-                <span className="flex shrink-0 items-center opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                <span className="flex shrink-0 items-center opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 max-md:opacity-100">
                   <RowAction
                     glyph={g.restore}
                     title={l.restore(c.name)}
@@ -829,19 +1031,13 @@ export function RailTree({
           </button>
         ))}
 
-      {/* ONE style door for the whole tree, anchored to whichever palette button opened it.
-          A pick MERGES (the popover hands a partial); reset hands null — the consumer owns both. */}
-      <RailStylePopover
-        open={styling !== null}
-        onClose={() => setStyling(null)}
-        anchorRef={styleAnchorRef}
-        glyphs={styleGlyphs}
-        onPick={(style) => {
-          if (!styling) return;
-          if (styling.kind === "channel") on.setChannelStyle?.(styling.id, style);
-          else on.setProjectStyle?.(styling.id, style);
-          if (style === null) setStyling(null); // reset closes; picks stay open for a second axis
-        }}
+      {/* ONE overflow menu for the whole tree — items built from the live row (see above) */}
+      <RailRowMenu
+        open={menu !== null}
+        onClose={() => setMenu(null)}
+        anchorRef={menuAnchorRef}
+        label={menuName}
+        items={menuItems}
       />
     </nav>
   );
@@ -866,11 +1062,14 @@ function SectionHead({ label, count }: { label: string; count: number }) {
 function RowAction({
   glyph,
   title,
+  filled = false,
   onClick,
 }: {
   glyph: string;
   title: string;
-  /** the clicked element rides along so an action can ANCHOR something to itself (the style door) */
+  /** the pinned-state dot renders FILLED — state wears the solid mark, chrome stays outlined */
+  filled?: boolean;
+  /** the clicked element rides along so an action can ANCHOR something to itself (the menu) */
   onClick: (el: HTMLElement) => void;
 }) {
   return (
@@ -884,7 +1083,7 @@ function RowAction({
       }}
       className="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-sm text-dim hover:bg-surface-2 hover:text-ink"
     >
-      <Symbol name={glyph} size="1rem" />
+      <Symbol name={glyph} filled={filled} size="1rem" />
     </button>
   );
 }

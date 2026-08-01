@@ -53,10 +53,15 @@ tag
 visibility
 visibility_off
 # the asset level + the style door (2026-07-31, the data rail): the asset default mark, the
-# palette that opens RailStylePopover, and content_copy (duplicate — donor census has it):
+# palette glyph key (kept in DEFAULT_RAIL_GLYPHS for consumers even though the menu no longer
+# renders it), and content_copy (duplicate — donor census has it):
 draft
 palette
 content_copy
+# the rail UX round (2026-08-01): the per-row overflow-menu trigger and the header's
+# create-channel mark (a folder is born, not a generic `+`):
+more_horiz
+create_new_folder
 
 # ── used by thread/CodeBlock (the Copy affordance) — BOTH in the donor census already, and both
 #    repeated here because this census lists what THIS repo's components render, not what some

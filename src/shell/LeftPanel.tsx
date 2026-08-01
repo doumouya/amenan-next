@@ -34,7 +34,7 @@
 //    the theme has to be restored before first paint, before any consumer module exists, so there
 //    is no consumer seam early enough to own it. That is the whole line — pre-paint or app tier.
 
-import type { ReactNode } from "react";
+import { useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Symbol } from "./Symbol";
 import { EmptyRegion } from "./EmptyRegion";
 
@@ -45,6 +45,7 @@ export interface LeftPanelLabels {
   collapse: string;
   empty: string;
   emptyHint: string;
+  resize: string;
 }
 
 export const DEFAULT_LEFT_PANEL_LABELS: LeftPanelLabels = {
@@ -52,7 +53,29 @@ export const DEFAULT_LEFT_PANEL_LABELS: LeftPanelLabels = {
   collapse: "Hide objects",
   empty: "No objects here",
   emptyHint: "This surface publishes no rail",
+  resize: "Resize panel",
 };
+
+/**
+ * The drag-resize capability (2026-08-01) — declared, not detected: absent → no handle, no
+ * listeners. The panel's width IS the `--object-rail-w` token (RailTree binds `w-full` against
+ * it on purpose), so a resize moves the TOKEN — an inline override on this element — never the
+ * tree. Widths travel in REM: the rail rides the rem grid, so a saved width survives the
+ * user's font-scale setting instead of fighting it. Persistence is the consumer's, like the
+ * retract flag (`onCommit`; null = reset to the token's default).
+ */
+export interface LeftPanelResize {
+  minRem: number;
+  maxRem: number;
+  /** the persisted width applied as the token override; null/undefined = the token default */
+  widthRem?: number | null;
+  onCommit: (widthRem: number | null) => void;
+}
+
+/** clamp + snap to the 0.25rem minor grid — exported for the unit test */
+export function clampRailWidth(rem: number, min: number, max: number): number {
+  return Math.round(Math.min(max, Math.max(min, rem)) * 4) / 4;
+}
 
 /** the empty-state glyph — a documented default, overridable; must be in the glyph census */
 export const LEFT_PANEL_EMPTY_ICON = "widgets";
@@ -73,6 +96,8 @@ export interface LeftPanelProps {
   emptyIcon?: string;
   /** e.g. for a consumer's `aria-controls` on a drawer opener; no default, no `dc-` literal */
   id?: string;
+  /** drag-resize, declared not detected — see LeftPanelResize */
+  resize?: LeftPanelResize;
 }
 
 export function LeftPanel({
@@ -83,8 +108,18 @@ export function LeftPanel({
   labels,
   emptyIcon = LEFT_PANEL_EMPTY_ICON,
   id,
+  resize,
 }: LeftPanelProps) {
   const l = { ...DEFAULT_LEFT_PANEL_LABELS, ...labels };
+
+  const asideRef = useRef<HTMLElement>(null);
+  // the in-flight drag width; null when not dragging. Committed on pointer-up.
+  const [drag, setDrag] = useState<number | null>(null);
+  const liveRem = drag ?? resize?.widthRem ?? null;
+  // the token override rides an inline custom property, so every `var(--object-rail-w)` inside
+  // (the aside's own width, RailTree's w-full, the strip's entrance) reads the resized value
+  const widthVar =
+    liveRem != null ? ({ "--object-rail-w": `${liveRem}rem` } as CSSProperties) : undefined;
 
   // desktop-retracted → a thin strip carrying the reopen double-arrow. Below md the panel is a
   // drawer, so the strip is hidden there rather than stacked beside it.
@@ -96,6 +131,7 @@ export function LeftPanel({
         title={l.expand}
         aria-label={l.expand}
         aria-expanded={false}
+        style={widthVar}
         // the size-change gesture (bridge.css): retract SWAPS elements, so the glide comes from
         // @starting-style — the strip mounts at the panel's width and eases down to its own
         className="flex h-full w-10 shrink-0 cursor-pointer flex-col items-center overflow-hidden border-r border-rule bg-bg pt-2 text-dim transition-[width] duration-[var(--med)] ease-[var(--ease)] hover:text-ink max-md:hidden md:starting:w-[var(--object-rail-w)]"
@@ -107,9 +143,17 @@ export function LeftPanel({
 
   return (
     <aside
+      ref={asideRef}
       id={id}
-      className={`flex w-[var(--object-rail-w)] shrink-0 flex-col overflow-hidden border-r border-rule bg-bg transition-[width,transform] duration-[var(--med)] ease-[var(--ease)] max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-[var(--z-side-panel)] max-md:w-[var(--context-w)] max-md:shadow-dialog md:starting:w-10 ${
+      style={widthVar}
+      className={`relative flex w-[var(--object-rail-w)] shrink-0 flex-col overflow-hidden border-r border-rule bg-bg max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-[var(--z-side-panel)] max-md:w-[var(--context-w)] max-md:shadow-dialog md:starting:w-10 ${
         sheetOpen ? "" : "max-md:-translate-x-full"
+      } ${
+        // a width transition under a pointer drag lags the pointer by a full easing cycle, so
+        // dragging suspends it; the retract/entrance glides keep it otherwise
+        drag != null
+          ? "transition-none"
+          : "transition-[width,transform] duration-[var(--med)] ease-[var(--ease)]"
       }`}
     >
       {/* A CENTRED CORNER CLUSTER, and no title — see the header note above. */}
@@ -127,6 +171,49 @@ export function LeftPanel({
       <div className="min-h-0 flex-1 overflow-y-auto">
         {children ?? <EmptyRegion icon={emptyIcon} label={l.empty} hint={l.emptyHint} />}
       </div>
+      {/* the drag handle — a slim strip on the panel's outer edge. Pointer capture keeps the
+          drag alive off-element; widths are computed in rem against the live root font size so
+          the grid stays the unit; double-click resets to the token default. ≥md only — the <md
+          drawer has a fixed width and nothing to resize. */}
+      {resize && (
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label={l.resize}
+          title={l.resize}
+          onPointerDown={(e) => {
+            e.preventDefault();
+            e.currentTarget.setPointerCapture(e.pointerId);
+            setDrag(liveRem ?? widthRemOf(asideRef.current));
+          }}
+          onPointerMove={(e) => {
+            if (drag == null) return;
+            const left = asideRef.current?.getBoundingClientRect().left ?? 0;
+            const rem = (e.clientX - left) / rootFontPx();
+            setDrag(clampRailWidth(rem, resize.minRem, resize.maxRem));
+          }}
+          onPointerUp={() => {
+            if (drag != null) resize.onCommit(drag);
+            setDrag(null);
+          }}
+          onDoubleClick={() => {
+            setDrag(null);
+            resize.onCommit(null);
+          }}
+          className="absolute inset-y-0 right-0 w-1 cursor-col-resize touch-none select-none hover:bg-signal-tint active:bg-signal-tint max-md:hidden"
+        />
+      )}
     </aside>
   );
+}
+
+/** the root font size in px — the rem↔px bridge the drag math needs (font-scale aware) */
+function rootFontPx(): number {
+  return parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+}
+
+/** the aside's current width in rem, read from layout when no override is set yet */
+function widthRemOf(el: HTMLElement | null): number {
+  if (!el) return 16;
+  return el.getBoundingClientRect().width / rootFontPx();
 }

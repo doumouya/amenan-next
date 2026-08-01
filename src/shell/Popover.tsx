@@ -24,6 +24,7 @@
 import {
   useEffect,
   useLayoutEffect,
+  useRef,
   useState,
   type CSSProperties,
   type ReactNode,
@@ -42,6 +43,7 @@ export interface PopoverProps {
 
 export function Popover({ open, onClose, anchorRef, direction = "down", children }: PopoverProps) {
   const [pos, setPos] = useState<CSSProperties | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
     if (!open) {
@@ -57,6 +59,22 @@ export function Popover({ open, onClose, anchorRef, direction = "down", children
         : { right, top: Math.min(window.innerHeight - 8, r.bottom + 4) },
     );
   }, [open, direction, anchorRef]);
+
+  // the viewport clamp, measured AFTER the panel renders (its width is content-driven): a panel
+  // right-aligned to an anchor near the LEFT edge — the create row's style preview lives at the
+  // rail's first column — would otherwise extend past x=0 and its far cells be unclickable
+  // (found live, 2026-08-01). offset*, not getBoundingClientRect: the entrance animation SCALES
+  // the panel, and a mid-animation rect under-measures the width (a 3px-off clamp, also found
+  // live). Convergence is explicit: zero offsetWidth means no layout engine (jsdom) and bails,
+  // and re-setting an already-clamped position is skipped — either guard alone was an infinite
+  // setState loop waiting to happen.
+  useLayoutEffect(() => {
+    if (!open || !pos) return;
+    const el = panelRef.current;
+    if (!el || el.offsetWidth === 0 || el.offsetLeft >= 8) return;
+    const target = Math.max(8, window.innerWidth - el.offsetWidth - 8);
+    setPos((p) => (p && p.right !== target ? { ...p, right: target } : p));
+  }, [open, pos]);
 
   // Esc-on-capture: while open, Esc closes THIS and nothing else sees the key (overlays close
   // first — the export's law)
@@ -78,6 +96,7 @@ export function Popover({ open, onClose, anchorRef, direction = "down", children
       {/* click-away: a transparent veil below the panel, above everything else */}
       <div className="fixed inset-0 z-20" aria-hidden onClick={onClose} />
       <div
+        ref={panelRef}
         style={pos}
         className={`fixed z-30 flex max-h-96 min-w-52 flex-col gap-2 overflow-y-auto rounded-lg border border-border bg-bg p-2 shadow-[var(--shadow-popover)] animate-[an-pop_var(--entrance)_ease] ${
           direction === "up" ? "origin-bottom-right" : "origin-top-right"

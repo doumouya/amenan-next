@@ -11,8 +11,18 @@
 // shape.
 
 // ── the five regions (Figma page 13:56) ──────────────────────────────────────────────────────
-export { LeftPanel, DEFAULT_LEFT_PANEL_LABELS, LEFT_PANEL_EMPTY_ICON } from "./shell/LeftPanel";
-export type { LeftPanelProps, LeftPanelState, LeftPanelLabels } from "./shell/LeftPanel";
+export {
+  LeftPanel,
+  clampRailWidth,
+  DEFAULT_LEFT_PANEL_LABELS,
+  LEFT_PANEL_EMPTY_ICON,
+} from "./shell/LeftPanel";
+export type {
+  LeftPanelProps,
+  LeftPanelState,
+  LeftPanelLabels,
+  LeftPanelResize,
+} from "./shell/LeftPanel";
 
 export {
   RightPanel,
@@ -55,12 +65,16 @@ export type {
   RailTreeLabels,
   RailGlyphs,
 } from "./shell/RailTree";
+// the inline create/edit form (numu1's add-form anatomy) — superseded RailStylePopover
 export {
-  RailStylePopover,
+  RailStyleForm,
   DEFAULT_RAIL_STYLE_LABELS,
   DEFAULT_STYLE_GLYPHS,
-} from "./shell/RailStylePopover";
-export type { RailStylePopoverProps, RailStylePopoverLabels } from "./shell/RailStylePopover";
+} from "./shell/RailStyleForm";
+export type { RailStyleFormProps, RailStyleFormLabels } from "./shell/RailStyleForm";
+
+export { RailRowMenu } from "./shell/RailRowMenu";
+export type { RailRowMenuProps, RailRowMenuItem } from "./shell/RailRowMenu";
 
 export { EmptyRegion } from "./shell/EmptyRegion";
 
@@ -72,8 +86,10 @@ export type { PopoverProps } from "./shell/Popover";
 // ── the icon primitive ───────────────────────────────────────────────────────────────────────
 // The code home of the Figma `icon/ms/*` family. Exported because a consumer's own chrome (its
 // footer, its surfaces) must render glyphs through the SAME subsetted-font mechanism, or it will
-// reach for an svg and fork the icon source of truth.
-export { Symbol } from "./shell/Symbol";
+// reach for an svg and fork the icon source of truth. `renderMaterialGlyph` is the glyph-ref
+// seam's default resolver (bare ref = Material forever; a pack = a consumer resolver, O(1)).
+export { Symbol, renderMaterialGlyph } from "./shell/Symbol";
+export type { GlyphRenderer } from "./shell/Symbol";
 
 // ── the region contract (the surface→shell seam) ─────────────────────────────────────────────
 export {

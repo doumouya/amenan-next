@@ -21,6 +21,10 @@ export interface Mounted {
   /** the first button whose aria-label matches exactly */
   button: (label: string) => HTMLButtonElement;
   click: (el: Element) => Promise<void>;
+  /** dispatch a keydown (bubbling, so React's root listener sees it) — for the inline inputs */
+  key: (el: Element, key: string) => Promise<void>;
+  /** dispatch an arbitrary event inside act — for the rarer gestures (dblclick, pointer) */
+  fire: (el: Element, ev: Event) => Promise<void>;
   text: () => string;
 }
 
@@ -51,6 +55,16 @@ export async function mount(ui: ReactElement): Promise<Mounted> {
     async click(el) {
       await act(async () => {
         el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+    },
+    async key(el, key) {
+      await act(async () => {
+        el.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+      });
+    },
+    async fire(el, ev) {
+      await act(async () => {
+        el.dispatchEvent(ev);
       });
     },
     async rerender(next) {
