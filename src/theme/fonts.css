@@ -83,10 +83,18 @@
    preloads the result from its document head. A glyph rendered but not subsetted paints its own
    NAME in prose inside the button, because font-display is block — that is the whole reason the
    census travels with the components. The filename carries no bracket-axis suffix, which also
-   keeps a preload's cache key from disagreeing with the @font-face URL. */
+   keeps a preload's cache key from disagreeing with the @font-face URL.
+
+   THE ?v QUERY (2026-08-01, paid for): the subset MUTATES under a STABLE name every time a
+   census grows, and datacore served it `immutable, max-age=1y` — so returning visitors held the
+   old subset and rendered every NEW glyph as its ligature word, for up to a year. The version
+   query busts every cache that predates the lesson; go-forward staleness is the consumer's
+   header discipline (datacore now serves this one font `must-revalidate`, ETag-cheap). A
+   consumer's preload URL must carry the SAME query or the preload double-fetches. Bump only if
+   this class of bust is ever needed again. */
 @font-face {
   font-family: "Material Symbols Outlined";
-  src: url("/fonts/material-symbols-subset.woff2") format("woff2");
+  src: url("/fonts/material-symbols-subset.woff2?v=2") format("woff2");
   font-weight: 100 700;
   font-display: block;
 }
