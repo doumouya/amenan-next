@@ -45,12 +45,14 @@ export type { ComposerProps, ComposerLabels, ComposerModeIcon } from "./shell/Co
 
 export {
   RailTree,
-  // the pure helpers: invariant 1 and the three moves, usable (and tested) without a DOM
+  // the pure helpers: the two invariants and the four moves, usable (and tested) without a DOM
   orphanProjects,
+  orphanFolderContents,
   sortPinnedFirst,
   reorderChannels,
   moveProject,
   moveAsset,
+  moveFolder,
   DEFAULT_RAIL_TREE_LABELS,
   DEFAULT_RAIL_GLYPHS,
 } from "./shell/RailTree";
@@ -59,6 +61,7 @@ export type {
   RailChannel,
   RailProject,
   RailAsset,
+  RailFolder,
   RailRowStyle,
   RailTreeCapabilities,
   RailTreeHandlers,

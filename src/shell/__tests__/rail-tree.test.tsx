@@ -464,3 +464,361 @@ describe("the overflow menu", () => {
     await m.unmount();
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// The FOLDER level (the filesystem plane, 2026-08-01)
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+import { moveFolder, orphanFolderContents, type RailFolder } from "../RailTree";
+
+const folders: RailFolder[] = [
+  { id: "f1", name: "staging", projectId: "p1", parentId: null },
+  { id: "f2", name: "marts", projectId: "p1", parentId: null },
+  { id: "f11", name: "raw", projectId: "p1", parentId: "f1" },
+];
+const filed: RailAsset[] = [
+  { id: "a1", name: "model.sql", projectId: "p1", folderId: "f1" },
+  { id: "a2", name: "root.sql", projectId: "p1" },
+  { id: "a3", name: "deep.sql", projectId: "p1", folderId: "f11" },
+];
+
+describe("moveFolder — the folder filing move (folders AND filed assets)", () => {
+  it("re-parents within the project at the asked index; assets untouched same-project", () => {
+    const next = moveFolder(folders, filed, "f2", "p1", "f1", 0);
+    expect(next.folders.find((f) => f.id === "f2")?.parentId).toBe("f1");
+    expect(next.folders).toHaveLength(3);
+    expect(next.assets).toEqual(filed);
+  });
+
+  it("rewrites `projectId` on the WHOLE subtree when crossing projects — folders AND assets", () => {
+    const next = moveFolder(folders, filed, "f1", "p2", null, 0);
+    expect(next.folders.find((f) => f.id === "f1")?.projectId).toBe("p2");
+    expect(next.folders.find((f) => f.id === "f11")?.projectId).toBe("p2"); // descendant followed
+    expect(next.folders.find((f) => f.id === "f2")?.projectId).toBe("p1"); // sibling did not
+    // THE STRANDING REGRESSION (2026-08-01 review): assets filed in the moved subtree — direct
+    // (a1 in f1) AND nested (a3 in f11) — must follow, or they fail every render filter and
+    // vanish from the tree. The root asset (a2) stays.
+    expect(next.assets.find((a) => a.id === "a1")).toMatchObject({ projectId: "p2", folderId: "f1" });
+    expect(next.assets.find((a) => a.id === "a3")).toMatchObject({ projectId: "p2", folderId: "f11" });
+    expect(next.assets.find((a) => a.id === "a2")?.projectId).toBe("p1");
+  });
+
+  it("refuses a move into itself or its own descendant — fresh unchanged copies", () => {
+    expect(moveFolder(folders, filed, "f1", "p1", "f1", 0)).toEqual({ folders, assets: filed });
+    expect(moveFolder(folders, filed, "f1", "p1", "f11", 0)).toEqual({ folders, assets: filed });
+  });
+
+  it("tolerates unknown ids and never mutates the inputs", () => {
+    const fIn = folders.map((f) => ({ ...f }));
+    const aIn = filed.map((a) => ({ ...a }));
+    expect(moveFolder(fIn, aIn, "ghost", "p1", null, 0).folders).toHaveLength(3);
+    moveFolder(fIn, aIn, "f1", "p2", null, 0);
+    expect(fIn).toEqual(folders);
+    expect(aIn).toEqual(filed);
+  });
+});
+
+describe("orphanFolderContents — invariant 1, the folder edition", () => {
+  it("re-homes direct children to the deleted folder's parent and removes only the folder", () => {
+    const { folders: fs, assets: as } = orphanFolderContents(folders, filed, "f1");
+    expect(fs.find((f) => f.id === "f1")).toBeUndefined(); // the folder itself is gone
+    expect(fs.find((f) => f.id === "f11")?.parentId).toBeNull(); // child → f1's parent (root)
+    expect(as.find((a) => a.id === "a1")?.folderId).toBeNull(); // filed asset → root
+    expect(as.find((a) => a.id === "a3")?.folderId).toBe("f11"); // deeper asset untouched
+    expect(as).toHaveLength(3); // nothing destroyed
+  });
+
+  it("a NESTED folder's children land at ITS parent, not the root", () => {
+    const { assets: as } = orphanFolderContents(folders, filed, "f11");
+    expect(as.find((a) => a.id === "a3")?.folderId).toBe("f1");
+  });
+
+  it("never mutates the inputs", () => {
+    const fIn = folders.map((f) => ({ ...f }));
+    const aIn = filed.map((a) => ({ ...a }));
+    orphanFolderContents(fIn, aIn, "f1");
+    expect(fIn).toEqual(folders);
+    expect(aIn).toEqual(filed);
+  });
+});
+
+describe("moveAsset with the folder axis", () => {
+  it("files into a folder and indexes among THAT folder's members only", () => {
+    const next = moveAsset(filed, "a2", "p1", 0, "f1");
+    expect(next.find((a) => a.id === "a2")?.folderId).toBe("f1");
+    const f1Members = next.filter((a) => (a.folderId ?? null) === "f1").map((a) => a.id);
+    expect(f1Members).toEqual(["a2", "a1"]);
+  });
+
+  it("the 4-arg call neither reads nor writes `folderId` — the flat contract survives", () => {
+    const next = moveAsset(filed, "a1", "p2", 0);
+    expect(next.find((a) => a.id === "a1")?.folderId).toBe("f1"); // untouched
+    const flat = moveAsset(assets, "a1", "p2", 0);
+    expect("folderId" in (flat.find((a) => a.id === "a1") ?? {})).toBe(false); // never minted
+  });
+
+  it("null files back to the project root", () => {
+    const next = moveAsset(filed, "a3", "p1", 0, null);
+    expect(next.find((a) => a.id === "a3")?.folderId).toBeNull();
+  });
+});
+
+describe("the folders capability is DECLARED, not detected", () => {
+  it("renders folders with their assets inside, and loose assets after", async () => {
+    const m = await mount(
+      <RailTree
+        channels={channels}
+        projects={projects}
+        assets={filed}
+        folders={folders}
+        capabilities={{ assets: true, folders: true }}
+        on={{ selectAsset: () => {} }}
+      />,
+    );
+    expect(m.text()).toContain("staging");
+    expect(m.text()).toContain("raw"); // nested folder renders
+    expect(m.text()).toContain("deep.sql"); // asset inside the nested folder
+    expect(m.text()).toContain("root.sql"); // loose asset at the project root
+    await m.unmount();
+  });
+
+  it("emits NOTHING for folders when the capability is off — assets render FLAT", async () => {
+    const m = await mount(
+      <RailTree
+        channels={channels}
+        projects={projects}
+        assets={filed}
+        folders={folders}
+        capabilities={{ assets: true }}
+        on={{ selectAsset: () => {} }}
+      />,
+    );
+    expect(m.text()).not.toContain("staging");
+    // a filed asset still renders — folderId is IGNORED, not a hiding mechanism
+    expect(m.text()).toContain("model.sql");
+    expect(m.text()).toContain("deep.sql");
+    await m.unmount();
+  });
+
+  it("a `parentId` cycle renders finitely (nothing, not a hang)", async () => {
+    const cyclic: RailFolder[] = [{ id: "fx", name: "loop", projectId: "p1", parentId: "fx" }];
+    const m = await mount(
+      <RailTree
+        channels={channels}
+        projects={projects}
+        folders={cyclic}
+        capabilities={{ folders: true }}
+      />,
+    );
+    expect(m.text()).not.toContain("loop"); // unreachable from the root — and no infinite render
+    await m.unmount();
+  });
+
+  it("an unfolded empty folder says so; a folded one wears its count", async () => {
+    const one: RailFolder[] = [{ id: "fe", name: "blankbox", projectId: "p1", parentId: null }];
+    const m = await mount(
+      <RailTree
+        channels={channels}
+        projects={projects}
+        folders={one}
+        capabilities={{ folders: true }}
+      />,
+    );
+    expect(m.text()).toContain(L.emptyFolder); // "it worked" must be visible
+    await m.click(m.button(L.fold("blankbox")));
+    expect(m.text()).not.toContain(L.emptyFolder);
+    const row = m.button(L.unfold("blankbox")).closest("div");
+    expect(row?.textContent).toContain("0"); // the count badge, the channel lesson one level down
+    await m.unmount();
+  });
+
+  it("folds independently of a channel sharing the same id (namespaced fold keys)", async () => {
+    const clash: RailFolder[] = [{ id: "c1", name: "same-id", projectId: "p1", parentId: null }];
+    const m = await mount(
+      <RailTree
+        channels={channels}
+        projects={projects}
+        folders={clash}
+        capabilities={{ folders: true }}
+      />,
+    );
+    await m.click(m.button(L.fold("same-id"))); // fold the FOLDER whose id collides with c1
+    expect(m.text()).toContain("datacore"); // the CHANNEL c1 stayed unfolded
+    await m.unmount();
+  });
+});
+
+describe("folder creation (invariant 2, generalised) and selection", () => {
+  it("the project menu's New-folder item exists only when gated, and the create names the call", async () => {
+    const calls: string[] = [];
+    const m = await mount(
+      <RailTree
+        channels={channels}
+        projects={projects}
+        folders={[]}
+        capabilities={{ folders: true }}
+        on={{
+          createFolder: (pid, parent, name, style) =>
+            calls.push(`${pid}:${parent}:${name}:${style?.colour}`),
+          setFolderStyle: () => {},
+        }}
+      />,
+    );
+    await m.click(m.button(L.more("datacore")));
+    await m.click(m.button(L.newFolderIn("datacore")));
+    await m.click(m.button("Colour chart-2")); // the style rides the create call
+    const input = m.container.querySelector<HTMLInputElement>(
+      `input[aria-label="${L.folderName}"]`,
+    )!;
+    input.value = "assets";
+    await m.key(input, "Enter");
+    expect(calls).toEqual(["p1:null:assets:chart-2"]);
+    await m.unmount();
+  });
+
+  it("an unnamed folder is a cancel — the container rule", async () => {
+    const calls: string[] = [];
+    const m = await mount(
+      <RailTree
+        channels={channels}
+        projects={projects}
+        folders={[]}
+        capabilities={{ folders: true }}
+        on={{ createFolder: (_p, _q, name) => calls.push(name) }}
+      />,
+    );
+    await m.click(m.button(L.more("datacore")));
+    await m.click(m.button(L.newFolderIn("datacore")));
+    const input = m.container.querySelector<HTMLInputElement>(
+      `input[aria-label="${L.folderName}"]`,
+    )!;
+    await m.key(input, "Enter"); // empty commit
+    expect(calls).toEqual([]);
+    await m.unmount();
+  });
+
+  it("without `createFolder` the menu item and the folder's + are simply absent", async () => {
+    const m = await mount(
+      <RailTree
+        channels={channels}
+        projects={projects}
+        folders={folders}
+        capabilities={{ folders: true }}
+      />,
+    );
+    await m.click(m.button(L.more("datacore")));
+    expect(m.buttons().map((b) => b.getAttribute("aria-label"))).not.toContain(
+      L.newFolderIn("datacore"),
+    );
+    await m.unmount();
+  });
+
+  it("creating a subfolder into a FOLDED folder unfolds it — the row is born visible", async () => {
+    const m = await mount(
+      <RailTree
+        channels={channels}
+        projects={projects}
+        folders={folders}
+        assets={filed}
+        capabilities={{ folders: true, assets: true }}
+        on={{ createFolder: () => {} }}
+      />,
+    );
+    await m.click(m.button(L.fold("staging")));
+    expect(m.text()).not.toContain("raw"); // children hidden
+    await m.click(m.button(L.newFolderIn("staging"))); // the folder row's promoted +
+    expect(m.text()).toContain("raw"); // the chain re-revealed
+    expect(m.container.querySelector(`input[aria-label="${L.folderName}"]`)).not.toBeNull();
+    await m.unmount();
+  });
+
+  it("selection is declared-not-detected, and `activeFolderId` wears the current mark", async () => {
+    let selected: string | null = null;
+    const off = await mount(
+      <RailTree
+        channels={channels}
+        projects={projects}
+        folders={folders}
+        capabilities={{ folders: true }}
+      />,
+    );
+    // no selectFolder → the name is not a button
+    const labels = off.buttons().map((b) => b.textContent);
+    expect(labels.filter((t) => t === "staging")).toHaveLength(0);
+    await off.unmount();
+
+    const on = await mount(
+      <RailTree
+        channels={channels}
+        projects={projects}
+        folders={folders}
+        activeFolderId="f1"
+        capabilities={{ folders: true }}
+        on={{ selectFolder: (id) => (selected = id) }}
+      />,
+    );
+    const name = on.buttons().find((b) => b.textContent === "staging")!;
+    expect(name.getAttribute("aria-current")).toBe("true");
+    await on.click(name);
+    expect(selected).toBe("f1");
+    await on.unmount();
+  });
+});
+
+describe("the folder menu", () => {
+  it("Rename · New folder · Hide · Delete — and Delete hands the orphaned lists pre-applied", async () => {
+    const got: string[] = [];
+    let orphaned: { folders: RailFolder[]; assets: RailAsset[] } | null = null;
+    const m = await mount(
+      <RailTree
+        channels={channels}
+        projects={projects}
+        folders={folders}
+        assets={filed}
+        capabilities={{ folders: true, assets: true }}
+        on={{
+          createFolder: () => got.push("create"),
+          setFolderHidden: (id, h) => got.push(`hide:${id}:${h}`),
+          deleteFolder: (id, o) => {
+            got.push(`delete:${id}`);
+            orphaned = o;
+          },
+        }}
+      />,
+    );
+    await m.click(m.button(L.more("staging")));
+    const items = m.buttons().map((b) => b.getAttribute("aria-label"));
+    expect(items).toContain(L.rename("staging"));
+    expect(items).toContain(L.newFolderIn("staging"));
+    expect(items).toContain(L.hide("staging"));
+    expect(items).toContain(L.remove("staging"));
+
+    await m.click(m.button(L.remove("staging")));
+    expect(got).toEqual(["delete:f1"]);
+    expect(orphaned!.folders.find((f) => f.id === "f1")).toBeUndefined();
+    expect(orphaned!.folders.find((f) => f.id === "f11")?.parentId).toBeNull();
+    expect(orphaned!.assets.find((a) => a.id === "a1")?.folderId).toBeNull();
+    await m.unmount();
+  });
+
+  it("a hidden folder appears in the Hidden section as a bare row with restore + delete", async () => {
+    const hidden: RailFolder[] = [
+      { id: "fh", name: "attic", projectId: "p1", parentId: null, hidden: true },
+    ];
+    let restored: [string, boolean] | null = null;
+    const m = await mount(
+      <RailTree
+        channels={channels}
+        projects={projects}
+        folders={hidden}
+        capabilities={{ folders: true }}
+        on={{ setFolderHidden: (id, h) => (restored = [id, h]) }}
+      />,
+    );
+    expect(m.text()).toContain(L.hiddenCount(1));
+    await m.click(m.buttons().find((b) => b.textContent?.includes(L.hiddenCount(1)))!);
+    await m.click(m.button(L.restore("attic")));
+    expect(restored).toEqual(["fh", false]);
+    await m.unmount();
+  });
+});
