@@ -46,10 +46,13 @@ descriptions are the declarations' own doc comments — fix them at the source, 
 | `DEFAULT_RAIL_GLYPHS` | const | `src/shell/RailTree.tsx` | Documented defaults. |
 | `DEFAULT_RAIL_TREE_LABELS` | const | `src/shell/RailTree.tsx` |  |
 | `moveAsset` | function | `src/shell/RailTree.tsx` | Move an asset into `toProjectId` at `toIndex` among that project's assets — `moveProject`'s mirror, same post-removal index convention, same "unknown id → fresh copy" contract. |
+| `moveFolder` | function | `src/shell/RailTree.tsx` | Move a folder under `toParentId` (null = the project root) in `toProjectId`, splicing at `toIndex` among that parent's sibling folders — the same post-removal index convention. |
 | `moveProject` | function | `src/shell/RailTree.tsx` | Move a project into `toChannelId` at position `toIndex` among THAT channel's members, returning a NEW flat list. |
+| `orphanFolderContents` | function | `src/shell/RailTree.tsx` | INVARIANT 1, the folder edition: deleting a folder re-homes its DIRECT children — subfolders and assets — to the deleted folder's own parent (project root when it had none). |
 | `orphanProjects` | function | `src/shell/RailTree.tsx` | INVARIANT 1. |
 | `RailAsset` | type | `src/shell/RailTree.tsx` | The third row level (the one-interface arc, decision 7): a first-class citizen living UNDER a project — a saved query, an attached file. |
 | `RailChannel` | type | `src/shell/RailTree.tsx` |  |
+| `RailFolder` | type | `src/shell/RailTree.tsx` | The FOLDER level (the filesystem plane, 2026-08-01): a filing container living UNDER a project, holding assets and other folders. |
 | `RailGlyphs` | type | `src/shell/RailTree.tsx` |  |
 | `RailProject` | type | `src/shell/RailTree.tsx` |  |
 | `RailRowStyle` | type | `src/shell/RailTree.tsx` | the style a picker emits: token NAMES only (`colour: "chart-3"`, never a CSS value) — the consumer maps to `var(--…)` when feeding rows (the literal-class law's data twin) |
