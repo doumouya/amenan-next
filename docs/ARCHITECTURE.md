@@ -98,6 +98,27 @@ needs permission. `Symbol` itself is exported for the opposite reason — a cons
 must render glyphs through the same subsetted-font mechanism, or it reaches for an svg and forks
 the icon source of truth (`src/index.ts`).
 
+## The folder level — a flat array, and the one integrity the tier takes back
+
+**Flat array, not a recursive union.** `folders` arrives as a fourth flat array beside
+channels/projects/assets rather than turning the model into a node tree, so a consumer that
+wants three levels keeps binding the shape it already has (`src/shell/RailTree.tsx`, the
+folder-level header). The compatibility is real but not total, and the exception is named
+rather than implied: the prop is optional and the capability defaults off, but `RailGlyphs` and
+`RailTreeLabels` gained required keys, which a consumer declaring a complete literal meets at
+compile time ([rail](rail.md), "The labels contract"). Rendering recursion is confined to one
+cycle-guarded function, because a consumer's `parentId` loop must render finitely rather than
+hang the tier.
+
+**Cross-project integrity is tier-owned — the one data decision taken back.** Everywhere else
+this component owns no data: rows in, callbacks out, the consumer persists. `moveFolder` breaks
+that deliberately — it takes AND returns assets, because a cross-project move must rewrite
+`projectId` across the whole descendant subtree, and it refuses a move into a folder's own
+descendant. A consumer that got either wrong would not see a bug in its own code: the assets
+left behind fail every render filter and vanish, or a `parentId` cycle corrupts rendering. A
+hazard that lands on every consumer identically is not a consumer's decision to make
+(`src/shell/RailTree.tsx`, `moveFolder`; the shape and the helpers are in [rail](rail.md)).
+
 ## What stays with consumers
 
 - **Entry cards.** The thread renderers — table, chart, code, markdown-lite — are platform,
