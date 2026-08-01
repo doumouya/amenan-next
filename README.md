@@ -1,18 +1,26 @@
 # amenan-next
 
-**Status: BUILDING** — the platform tier is being extracted from `datacore-gcp/web`. Nothing here is frozen.
+The house front-end platform for the Next.js + Tailwind v4 stack: a ~40-token theme contract,
+the Tailwind bridge, the five-region console shell, and the thread renderers a conversation's
+cards are made of. React 19, TypeScript, MIT. **Two consumers from day one** —
+[`datacore-gcp`](https://github.com/doumouya/datacore-gcp) (in production) and **numu2**
+(adopting) — which is deliberate: a library with a single consumer decays into that consumer's
+private code.
 
-The house front-end platform for the Next.js + Tailwind v4 stack: the token contract, the Tailwind bridge, and the five-region console shell. Two consumers from day one — **datacore-gcp** and **numu2** — which is deliberate: a library with a single consumer decays into that consumer's private code.
-
-It is the successor to [`amenan-ui`](../amenan-ui) (vanilla TS, **frozen**, pull-only). amenan-ui is not deprecated by neglect — its evolution moved here, so the freeze costs nothing.
+It is the successor to `amenan-ui` (vanilla TS, frozen, pull-only). amenan-ui is not deprecated
+by neglect — its evolution moved here, so the freeze costs nothing.
 
 ## What it is
 
 | tier | what lives here |
 |---|---|
 | `src/theme/` | the ~40-token contract, the ONE `@theme inline` Tailwind bridge, type roles, the baseline grid, self-hosted fonts, and the O(1) theme switch |
-| `src/shell/` | the five-region console shell — `LeftPanel`, `RightPanel`, `SurfaceHost`, `Composer`, `RailTree`, `EmptyRegion` |
-| `src/lib/` | the region store — surfaces publish their chrome, only the shell's renderers subscribe |
+| `src/shell/` | the five-region console shell — `LeftPanel`, `RightPanel`, `SurfaceHost`, `Composer`, `RailTree` (+ its style form and row menu), `Popover`, `Symbol`, `EmptyRegion` |
+| `src/thread/` | the conversation-card renderers — `ResultTable`, `ResultChart`, `CodeBlock`, the HTML-free markdown-lite, the tabular result model |
+| `src/lib/` | the region store (surfaces publish their chrome; only the shell's renderers subscribe) and the composer's completion contract |
+
+The full export list is generated from the compiler's own view of the barrel:
+[docs/REFERENCE.md](docs/REFERENCE.md).
 
 ## The laws it carries
 
@@ -28,6 +36,18 @@ It is the successor to [`amenan-ui`](../amenan-ui) (vanilla TS, **frozen**, pull
    scales with one home each (spacing derived from the grid token, type roles, per-theme radii,
    motion tokens), two micro-gestures. Census R9–R12 enforce the scales; /specimen judges the rest.
 9. **No persisted state may shape the first client render.** One text mismatch anywhere makes React regenerate the tree and strip the pre-paint theme attributes.
+10. **The tier never hardcodes a word or a route.** Every label arrives via a labels prop (i18n
+    is the consumer's), `SurfaceHost` takes `surfaces` + `activeId` rather than reading a router,
+    and `ComposerSpec.defaultMode` is a `string` — a shell that knows what a SQL dialect is has
+    picked its consumer. The boundaries and their reasons: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## The docs
+
+[docs/DOCMAP.md](docs/DOCMAP.md) is the index — one row per doc, in reading order, enforced by
+gate 11. The short version: [ARCHITECTURE](docs/ARCHITECTURE.md) (the why),
+[DESIGN](docs/DESIGN.md) (the visual language), [shell](docs/shell.md) · [rail](docs/rail.md) ·
+[composer](docs/composer.md) · [thread](docs/thread.md) · [theme](docs/theme.md) (the areas),
+[REFERENCE](docs/REFERENCE.md) (generated).
 
 ## Where the design lives
 
@@ -79,18 +99,26 @@ npm run test        # vitest
 npm run ci          # tools/ci.sh — auto-discovers tools/gates.d/*.sh
 ```
 
-`10-component-census` is the mechanism behind "controlling component growth": every component in
-`src/shell` is exported from `src/index.ts` and every barrel entry resolves to a real export (both
-directions), no file-private component is dead weight, nothing in `src/shell` or `src/lib` imports
-a consumer or `next/*`, no raw colour lives outside `src/theme`, no consumer namespace prefix is
-minted here, **every `@custom-variant` a component uses is declared in the theme tier**, and
-**every shipped file lies inside a declared `@source` root** — the two halves of one precondition,
-because a class emits only if its variant is declared *and* its file is scanned. Either half
-missing compiles to nothing at all, silently, which no typecheck or unit test can see.
-Every rule plants its own violation in an inline self-test and asserts that rule's tag fires by
-exact count, including the `[R0]` guard that refuses to call an unscanned tree clean.
+Four gates, each explaining itself in its own header:
+
+- `10-component-census` — the mechanism behind "controlling component growth": every component in
+  `src/shell` and `src/thread` is exported from the barrel and every barrel entry resolves (both
+  directions), nothing imports a consumer or `next/*`, no raw colour outside `src/theme`, every
+  used `@custom-variant` is declared, every shipped file lies inside a declared `@source` root.
+  Every rule plants its own violation in an inline self-test and asserts that rule's tag by exact
+  count, including the `[R0]` guard that refuses to call an unscanned tree clean.
+- `11-docs-coverage` — a doc without a [DOCMAP](docs/DOCMAP.md) row does not exist; every row's
+  target exists; every relative link resolves.
+- `12-reference-current` — [REFERENCE.md](docs/REFERENCE.md) is regenerated and byte-diffed, so
+  the export list can never quietly rot.
+- `13-docs-currency` — a commit touching `src/` or `tools/` reconciles the docs in the same
+  change, or carries an explicit `Docs: n/a (<reason>)` claim a reviewer can disagree with.
 
 The `@source` rule is a text check, and says so in its own header: this tier compiles no CSS, so
 the executing oracle lives in the consumer (datacore's `fe-build-audit` `[css]` rule compiles the
 real stylesheet twice and diffs the selector sets). This is the weaker half of that pair, kept here
 because this is the file the declaration must not vanish from.
+
+## License
+
+[MIT](LICENSE).
