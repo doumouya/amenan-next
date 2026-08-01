@@ -72,6 +72,13 @@ picks — name, icon and colour are one session, which is why the separate Style
 the RailStylePopover it opened were retired. Container creation reads as a SENTENCE: "New
 channel" is a full-width labelled row at the tree's foot, not a corner glyph to decode.
 
+Folders (the filesystem plane, RailTree.tsx `folderBlock`) inherit that law one level down: the
+folder row spends its single promoted seat on `add` — a SUBFOLDER — so the project's own
+folder-create door falls to the overflow menu rather than minting a second inline glyph. A
+folder's count badge is the counterweight, and it appears only while the row is FOLDED: it
+reports the visible direct children the fold is hiding. A number that reports what the eye can
+already see is decoration.
+
 ## The glyph-ref seam (2026-08-01)
 
 A consumer-fed icon ref is a string with a fixed grammar: a BARE name is a Material Symbols

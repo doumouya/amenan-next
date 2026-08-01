@@ -363,8 +363,9 @@ export interface RailTreeCapabilities {
   assets?: boolean;
   /**
    * The folder level (the filesystem plane). Off → the `folders` prop is ignored entirely AND
-   * `RailAsset.folderId` is ignored (assets render flat under their project, byte-identical to
-   * the pre-folder tree). Folder DRAG rides this capability + `moveFolders`, never `reorder` —
+   * `RailAsset.folderId` is ignored (assets render flat under their project, identically to
+   * the pre-folder tree — same computed indent; the class became an inline style). Folder DRAG
+   * rides this capability + `moveFolders`, never `reorder` —
    * filing, not sorting, the asset precedent.
    */
   folders?: boolean;
@@ -688,7 +689,8 @@ export function RailTree({
     sortPinnedFirst(projects.filter((p) => p.channelId === channelId && !p.hidden));
 
   /** a project's or folder's DIRECT assets. With folders off, `folderId` is ignored entirely —
-   *  the whole project renders flat, byte-identical to the pre-folder tree. */
+   *  the whole project renders flat, identically to the pre-folder tree (same computed indent;
+   *  `pl-8` became an inline 2rem — the one DOM-shape difference). */
   const assetsOf = (projectId: string, folderId: string | null = null) =>
     assetsOn
       ? assets.filter(
